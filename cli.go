@@ -51,6 +51,11 @@ func (r *execRunner) Start(ctx context.Context, args []string, stdin io.Reader) 
 	if err := cmd.Start(); err != nil {
 		return nil, nil, nil, err
 	}
+	go func() {
+		_ = cmd.Wait()
+		_ = outPW.Close()
+		_ = errPW.Close()
+	}()
 	return cmd, outPR, errPR, nil
 }
 

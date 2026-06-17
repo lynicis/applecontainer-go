@@ -1,10 +1,13 @@
 package applecontainer
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -186,9 +189,52 @@ func (p *cliProvider) InspectContainer(ctx context.Context, id string) (*Inspect
 	return ins, nil
 }
 
+type followLogsReadCloser struct {
+	io.Reader
+	cmd     *exec.Cmd
+	onClose func()
+}
+
+func (f *followLogsReadCloser) Close() error {
+	if f.onClose != nil {
+		f.onClose()
+	}
+	if f.cmd != nil && f.cmd.Process != nil {
+		_ = f.cmd.Process.Kill()
+	}
+	return nil
+}
+
 // ContainerLogs returns reader for container logs.
 func (p *cliProvider) ContainerLogs(ctx context.Context, id string, follow bool, n int) (io.ReadCloser, error) {
-	return nil, nil
+	if id == "" {
+		return nil, fmt.Errorf("applecontainer: cannot get logs for empty container ID")
+	}
+
+	args := []string{"logs"}
+	if n > 0 {
+		args = append(args, "-n", strconv.Itoa(n))
+	}
+
+	if follow {
+		args = append(args, "-f", id)
+		cmd, stdout, _, err := p.runner.Start(ctx, args, nil)
+		if err != nil {
+			return nil, fmt.Errorf("applecontainer: start follow logs failed: %w", err)
+		}
+		return &followLogsReadCloser{
+			Reader: stdout,
+			cmd:    cmd,
+		}, nil
+	}
+
+	args = append(args, id)
+	stdout, _, _, err := p.runner.Run(ctx, args, nil)
+	if err != nil {
+		return nil, fmt.Errorf("applecontainer: get logs failed: %w", err)
+	}
+
+	return io.NopCloser(bytes.NewReader(stdout)), nil
 }
 
 // ExecContainer executes a command inside a running container.

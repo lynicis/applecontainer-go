@@ -2,7 +2,9 @@ package applecontainer
 
 import (
 	"context"
+	"io"
 	"os"
+	"os/exec"
 	"testing"
 	"time"
 
@@ -287,5 +289,105 @@ func TestInspectContainer(t *testing.T) {
 
 	if len(capturedArgs) != 2 || capturedArgs[0] != "inspect" || capturedArgs[1] != fakeCID {
 		t.Errorf("unexpected args: %v", capturedArgs)
+	}
+}
+
+func TestContainerLogs(t *testing.T) {
+	fakeCID := "test-container-id"
+	
+	// Test follow = false
+	{
+		var capturedArgs []string
+		runner := &fakeRunner{
+			runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
+				capturedArgs = args
+				return []byte("log line 1\nlog line 2\n"), nil, 0, nil
+			},
+		}
+
+		p := &cliProvider{
+			runner: runner,
+			cfg:    Config{},
+			log:    log.TestLogger(t),
+		}
+
+		rc, err := p.ContainerLogs(context.Background(), fakeCID, false, 10)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		defer rc.Close()
+
+		data, err := io.ReadAll(rc)
+		if err != nil {
+			t.Fatalf("failed to read logs: %v", err)
+		}
+
+		if string(data) != "log line 1\nlog line 2\n" {
+			t.Errorf("got %q, want logs", string(data))
+		}
+
+		expectedArgs := []string{"logs", "-n", "10", fakeCID}
+		if len(capturedArgs) != len(expectedArgs) {
+			t.Fatalf("expected %d args, got %v", len(expectedArgs), capturedArgs)
+		}
+		for i, v := range capturedArgs {
+			if v != expectedArgs[i] {
+				t.Errorf("got %q, want %q", v, expectedArgs[i])
+			}
+		}
+	}
+
+	// Test follow = true
+	{
+		var capturedArgs []string
+		pr, pw := io.Pipe()
+		runner := &fakeRunner{
+			startFn: func(ctx context.Context, args []string, stdin io.Reader) (*exec.Cmd, io.Reader, io.Reader, error) {
+				capturedArgs = args
+				cmd := exec.Command("sleep", "10")
+				if err := cmd.Start(); err != nil {
+					t.Fatal(err)
+				}
+				return cmd, pr, nil, nil
+			},
+		}
+
+		p := &cliProvider{
+			runner: runner,
+			cfg:    Config{},
+			log:    log.TestLogger(t),
+		}
+
+		rc, err := p.ContainerLogs(context.Background(), fakeCID, true, 0)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// Write to pipe
+		go func() {
+			_, _ = pw.Write([]byte("stream line\n"))
+		}()
+
+		buf := make([]byte, 12)
+		n, err := rc.Read(buf)
+		if err != nil {
+			t.Fatalf("failed to read from log stream: %v", err)
+		}
+		if string(buf[:n]) != "stream line\n" {
+			t.Errorf("got stream %q", string(buf[:n]))
+		}
+
+		_ = rc.Close()
+		_ = pw.Close()
+
+		expectedArgs := []string{"logs", "-f", fakeCID}
+		if len(capturedArgs) != len(expectedArgs) {
+			t.Fatalf("expected %d args, got %v", len(expectedArgs), capturedArgs)
+		}
+		for i, v := range capturedArgs {
+			if v != expectedArgs[i] {
+				t.Errorf("got %q, want %q", v, expectedArgs[i])
+			}
+		}
 	}
 }
