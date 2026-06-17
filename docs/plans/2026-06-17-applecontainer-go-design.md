@@ -1,7 +1,7 @@
 # applecontainer-go Design
 
 **Status:** Approved 2026-06-17
-**Goal:** A testcontainers-go-style Go library that spins up Apple Container (`container` CLI) Linux containers as test dependencies, with wait strategies, lifecycle hooks, build-from-file, and a postgres module.
+**Goal:** A testcontainers-go-style Go library that spins up Apple Container (`container` CLI) Linux containers as test dependencies, with wait strategies, lifecycle hooks, and build-from-file.
 
 ---
 
@@ -37,8 +37,6 @@ applecontainer-go/
     port.go              ForListeningPort/ForExposedPort/ForMappedPort (adapted to IP model)
     health.go, sql.go    ForHealth / ForSQL
     file.go              ForFile
-  modules/
-    postgres/            own go.mod; Run, Container, With*, ConnectionString
   examples/              nginx_test.go, redis_test.go (integration-tagged)
   docs/plans/            this file + the implementation plan
 ```
@@ -161,11 +159,7 @@ Networks: `NewNetwork()` wraps `container network create`/`inspect`/`delete`. Co
 
 `WithContainerfile(FromContainerfile{Context, File, BuildArgs, Tags, Target, Platform, NoCache, Pull, Secrets, KeepImage})` -> `defaultBuildHook` runs `container build -t <tag> --progress plain <ctx>`, sets `req.Image = <tag>`. `KeepImage` controls whether `Terminate` removes the built image. Apple's BuildKit handles Dockerfile/Containerfile, multi-stage, build-args, secrets natively.
 
-## 10. Modules - postgres as the pattern
-
-`modules/postgres/` as its own Go module. `Container` embeds `applecontainer.Container` + typed fields; `Run(ctx, img, opts...)` gathers module opts, builds defaults (`WithEnv(POSTGRES_*)`, `WithExposedPorts("5432/tcp")`, `WithCmd("postgres")`), calls `applecontainer.Run`, wraps + inspects to read back env. `WithDatabase/WithUsername/WithPassword/WithInitScripts/WithConfigFile` + `ConnectionString`/`MustConnectionString`. Driver-agnostic (no `lib/pq` or `pgx` in the module). Establishes the template for future modules.
-
-## 11. Config
+## 10. Config
 
 ```go
 type Config struct {
@@ -180,19 +174,19 @@ type Config struct {
 
 Read once (`sync.Once`) from `~/.applecontainer.properties` + env (`APPLECONTAINER_*`, `CONTAINER_DEBUG`, `CONTAINER_DEFAULT_PLATFORM`). `config.Read()`/`config.Reset()` for tests.
 
-## 12. Library self-testing
+## 11. Library self-testing
 
 - **Unit (default):** fake `commandRunner` returns canned JSON, records arg lists. Tests arg-building, JSON parsing, option merge, hook order, wait strategies, endpoint math, session ID, labels, port allocation. No binary required.
-- **Integration (`//go:build integration`, gated on `APPLECONTAINER_INTEGRATION=1`):** real `container` CLI - nginx smoke, postgres+pgx connect, parallel containers, ForLog/ForPort/ForHTTP/ForSQL, build-from-file, networks, volumes. Requires macOS 26 + Apple silicon + `container system start`.
+- **Integration (`//go:build integration`, gated on `APPLECONTAINER_INTEGRATION=1`):** real `container` CLI - nginx smoke, postgres container pgx connect, parallel containers, ForLog/ForPort/ForHTTP/ForSQL, build-from-file, networks, volumes. Requires macOS 26 + Apple silicon + `container system start`.
 - `SkipIfProviderNotHealthy(t)` checks `container --version` + `container system status`.
 
-## 13. Dependencies & compatibility
+## 12. Dependencies & compatibility
 
 Stdlib only. `database/sql` used only in `wait/sql.go` (driver supplied by user). No `mergo`, no moby, no CGo. Requires `container` >= 1.0.0, macOS 26, Apple silicon - `VersionCheck()` on first use with a clear error. Pre-1.0: stability within patch versions (mirrors Apple's stance).
 
-## 14. Explicitly OUT of v1
+## 13. Explicitly OUT of v1
 
-No `compose`, no `modulegen`, no SSHD host-port-access (Apple's direct IP makes it unnecessary - containers reach the host at the vmnet gateway `192.168.64.1`), no reaper process, no `ImageSubstitutor` interface (just `HubImagePrefix`), no `--publish-socket`/`--ssh`/`--virtualization`/`--runtime`/`--kernel` wrappers (reachable via `WithCLIArgsModifier`). All layer cleanly on top later.
+No modules (such as a postgres module), no `compose`, no `modulegen`, no SSHD host-port-access (Apple's direct IP makes it unnecessary - containers reach the host at the vmnet gateway `192.168.64.1`), no reaper process, no `ImageSubstitutor` interface (just `HubImagePrefix`), no `--publish-socket`/`--ssh`/`--virtualization`/`--runtime`/`--kernel` wrappers (reachable via `WithCLIArgsModifier`). All layer cleanly on top later.
 
 ## Appendix: Apple Container facts (verified 2026-06-17)
 

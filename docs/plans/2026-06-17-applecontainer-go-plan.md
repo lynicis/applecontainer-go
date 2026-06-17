@@ -2,9 +2,9 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Build `github.com/lynicis/applecontainer-go`, a testcontainers-go-style Go library that spins up Apple Container (`container` CLI) Linux containers as test dependencies, with wait strategies, lifecycle hooks, build-from-file, and a postgres module.
+**Goal:** Build `github.com/lynicis/applecontainer-go`, a testcontainers-go-style Go library that spins up Apple Container (`container` CLI) Linux containers as test dependencies, with wait strategies, lifecycle hooks, and build-from-file.
 
-**Architecture:** Shell out to the `container` CLI (v1.0.0+) via a single `commandRunner` seam. Apple-native types throughout (no moby dependency). Direct container IP by default, opt-in host port mapping. `--rm` + session labels + `t.Cleanup` for teardown. Port the runtime-agnostic subsystems (wait strategies, options, hooks, modules) from testcontainers-go near-verbatim; rewrite the Docker-specific parts (provider, reaper->simple-cleanup, port model).
+**Architecture:** Shell out to the `container` CLI (v1.0.0+) via a single `commandRunner` seam. Apple-native types throughout (no moby dependency). Direct container IP by default, opt-in host port mapping. `--rm` + session labels + `t.Cleanup` for teardown. Port the runtime-agnostic subsystems (wait strategies, options, hooks) from testcontainers-go near-verbatim; rewrite the Docker-specific parts (provider, reaper->simple-cleanup, port model).
 
 **Tech Stack:** Go 1.26, stdlib only (no CGo, no moby, no mergo). Apple `container` CLI >= 1.0.0, macOS 26, Apple silicon. TDD: unit tests with a fake `commandRunner` (default build); integration tests behind `//go:build integration` + `APPLECONTAINER_INTEGRATION=1`.
 
@@ -617,56 +617,24 @@ Tag = `req.FromContainerfile.Tags[0]` or generated `applecontainer-<uuid>`. Set 
 
 ---
 
-## Phase 11 - Postgres module
+## Phase 11 - Integration tests + examples
 
-### Task 11.1: Module scaffold
-**Files:**
-- Create: `modules/postgres/go.mod`
-- Create: `modules/postgres/postgres.go`
-- Create: `modules/postgres/postgres_test.go`
-
-`go.mod` module `github.com/lynicis/applecontainer-go/modules/postgres`, requires `github.com/lynicis/applecontainer-go`.
-
-### Task 11.2: `postgres.go` - Run + Container + options
-```go
-type Container struct {
-	applecontainer.Container
-	dbName, user, password string
-}
-
-func Run(ctx context.Context, img string, opts ...applecontainer.ContainerCustomizer) (*Container, error)
-```
-
-`Run` builds defaults (`WithEnv(POSTGRES_DB/USER/PASSWORD)`, `WithExposedPorts("5432/tcp")`, `WithCmd("postgres")`), appends user opts, calls `applecontainer.Run`, wraps result, inspects to read back env (via `strings.CutPrefix` on `Inspect.Config.Env`), populates private fields.
-
-Options: `WithDatabase`, `WithUsername`, `WithPassword` (all `WithEnv` wrappers), `WithInitScripts` (build `ContainerFile`s -> `WithFiles`), `WithConfigFile`.
-
-`ConnectionString(ctx, args...)` -> `postgres://user:pass@<endpoint>/db?<args>`. `MustConnectionString`.
-
-### Task 11.3: Postgres unit test (fake provider)
-Assert default env/ports set; assert `ConnectionString` format; assert init-scripts become `WithFiles`.
-**Commit:** `feat: add postgres module`
-
----
-
-## Phase 12 - Integration tests + examples
-
-### Task 12.1: `examples/nginx_test.go`
+### Task 11.1: `examples/nginx_test.go`
 **Files:**
 - Create: `examples/nginx_test.go` (`//go:build integration`)
 
 Run nginx, `wait.ForHTTP("/")` + `ForListeningPort("80")`, `curl` the `Endpoint`, assert 200. Tests IP mode + host-port mode.
 
-### Task 12.2: `examples/postgres_test.go`
-Run postgres module, `wait.ForSQL("5432", "pgx", ...)` with `SELECT 1`, connect via `pgx`, assert round-trip. (pgx only in test deps.)
+### Task 11.2: `examples/postgres_test.go`
+Run a postgres container, `wait.ForSQL("5432", "pgx", ...)` with `SELECT 1`, connect via `pgx`, assert round-trip. (pgx only in test deps.)
 
-### Task 12.3: `examples/parallel_test.go`
+### Task 11.3: `examples/parallel_test.go`
 `t.Parallel()` with 3 postgres containers on the same port 5432 (IP mode) - proves zero-conflict.
 
-### Task 12.4: `examples/build_test.go`
+### Task 11.4: `examples/build_test.go`
 `WithContainerfile` building a trivial image, run it, assert output.
 
-### Task 12.5: `examples/network_test.go`
+### Task 11.5: `examples/network_test.go`
 Two containers on a custom network, exec `ping <other-ip>` from one to the other.
 
 **Run integration:** `APPLECONTAINER_INTEGRATION=1 go test -tags integration ./examples/...`
@@ -674,19 +642,19 @@ Two containers on a custom network, exec `ping <other-ip>` from one to the other
 
 ---
 
-## Phase 13 - Polish
+## Phase 12 - Polish
 
-### Task 13.1: README
+### Task 12.1: README
 **Files:**
 - Create: `README.md`
 
-Quickstart, install (`container` CLI + macOS 26 + Apple silicon), the IP-vs-host-port explainer, wait strategies overview, module list (postgres), integration test instructions.
+Quickstart, install (`container` CLI + macOS 26 + Apple silicon), the IP-vs-host-port explainer, wait strategies overview, integration test instructions.
 
-### Task 13.2: `doc.go` - package docs
+### Task 12.2: `doc.go` - package docs
 **Files:**
 - Create: `doc.go`
 
-### Task 13.3: Lint + vet
+### Task 12.3: Lint + vet
 Run: `go vet ./...` and `gofmt -l .`
 Expected: zero issues. (No external linter added to keep deps clean.)
 **Commit:** `docs: add README and package docs`

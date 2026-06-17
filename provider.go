@@ -68,10 +68,6 @@ func newCLIProvider(cfg Config) *cliProvider {
 	}
 }
 
-func buildCreateArgs(req *ContainerRequest, cidFile string) []string {
-	return []string{"create", "--rm", "--cidfile", cidFile, req.Image}
-}
-
 // CreateContainer creates a container but does not start it.
 func (p *cliProvider) CreateContainer(ctx context.Context, req *ContainerRequest) (*cliContainer, error) {
 	tmpFile, err := os.CreateTemp("", "applecontainer-cid-*")
@@ -82,7 +78,10 @@ func (p *cliProvider) CreateContainer(ctx context.Context, req *ContainerRequest
 	tmpFile.Close()
 	defer os.Remove(cidFile)
 
-	args := buildCreateArgs(req, cidFile)
+	args, err := buildCreateArgs(req, cidFile)
+	if err != nil {
+		return nil, err
+	}
 
 	_, _, _, err = p.runner.Run(ctx, args, nil)
 	if err != nil {
