@@ -20,16 +20,24 @@ type fakeRunner struct {
 	gotArgs   []string
 	gotStdin  []byte
 	callCount int
+	runFn     func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error)
+	startFn   func(ctx context.Context, args []string, stdin io.Reader) (*exec.Cmd, io.Reader, io.Reader, error)
 }
 
-func (f *fakeRunner) Run(_ context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
+func (f *fakeRunner) Run(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
 	f.gotArgs = args
 	f.gotStdin = stdin
 	f.callCount++
+	if f.runFn != nil {
+		return f.runFn(ctx, args, stdin)
+	}
 	return []byte(f.stdout), []byte(f.stderr), f.code, f.err
 }
 
-func (f *fakeRunner) Start(_ context.Context, _ []string, _ io.Reader) (*exec.Cmd, io.Reader, io.Reader, error) {
+func (f *fakeRunner) Start(ctx context.Context, args []string, stdin io.Reader) (*exec.Cmd, io.Reader, io.Reader, error) {
+	if f.startFn != nil {
+		return f.startFn(ctx, args, stdin)
+	}
 	return nil, nil, nil, errors.New("fakeRunner: Start not implemented")
 }
 
