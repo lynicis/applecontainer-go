@@ -15,16 +15,6 @@ import (
 	"github.com/lynicis/applecontainer-go/log"
 )
 
-// ContainerRequest represents the parameters for creating a container.
-type ContainerRequest struct {
-	Image string
-}
-
-// cliContainer is the library's implementation of the Container interface.
-type cliContainer struct {
-	provider *cliProvider
-	id       string
-}
 
 // ProcessOption is a functional option for container execution.
 type ProcessOption func(*processOptions)
