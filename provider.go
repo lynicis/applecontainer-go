@@ -401,6 +401,12 @@ func parseImageInspect(data []byte) (*ImageInspect, error) {
 
 // Health checks the health of the container provider.
 func (p *cliProvider) Health(ctx context.Context) error {
+	if _, err := checkVersion(ctx, p.runner); err != nil {
+		return fmt.Errorf("applecontainer: health check failed: version check: %w", err)
+	}
+	if _, _, _, err := p.runner.Run(ctx, []string{"system", "status"}, nil); err != nil {
+		return fmt.Errorf("applecontainer: health check failed: system status check: %w", err)
+	}
 	return nil
 }
 

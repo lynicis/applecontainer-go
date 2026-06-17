@@ -641,3 +641,43 @@ func TestImageInspect(t *testing.T) {
 		}
 	}
 }
+
+func TestHealth(t *testing.T) {
+	var capturedCommands [][]string
+
+	runner := &fakeRunner{
+		runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
+			capturedCommands = append(capturedCommands, args)
+			if len(args) == 1 && args[0] == "--version" {
+				return []byte("container version 1.0.0 (build: release, commit: unspeci)\n"), nil, 0, nil
+			}
+			if len(args) == 2 && args[0] == "system" && args[1] == "status" {
+				return []byte("running"), nil, 0, nil
+			}
+			return nil, nil, 0, nil
+		},
+	}
+
+	p := &cliProvider{
+		runner: runner,
+		cfg:    Config{},
+		log:    log.TestLogger(t),
+	}
+
+	err := p.Health(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(capturedCommands) != 2 {
+		t.Fatalf("expected 2 commands, got %v", capturedCommands)
+	}
+
+	if capturedCommands[0][0] != "--version" {
+		t.Errorf("expected first command to be --version, got %v", capturedCommands[0])
+	}
+
+	if capturedCommands[1][0] != "system" || capturedCommands[1][1] != "status" {
+		t.Errorf("expected second command to be system status, got %v", capturedCommands[1])
+	}
+}
