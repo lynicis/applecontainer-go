@@ -240,6 +240,14 @@ type logFanout struct {
 	// Stub log fanout for now
 }
 
+func (lf *logFanout) Start(ctx context.Context, c *cliContainer) error {
+	return nil
+}
+
+func (lf *logFanout) Stop() error {
+	return nil
+}
+
 // GetContainerID returns the ID of the container.
 func (c *cliContainer) GetContainerID() string {
 	return c.id
