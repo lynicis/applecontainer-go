@@ -249,3 +249,43 @@ func TestDeleteContainer(t *testing.T) {
 		}
 	}
 }
+
+func TestInspectContainer(t *testing.T) {
+	fakeCID := "test-container-id"
+	mockJSON := `[{"id": "test-container-id", "status": {"state": "running"}}]`
+	var capturedArgs []string
+
+	runner := &fakeRunner{
+		runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
+			capturedArgs = args
+			return []byte(mockJSON), nil, 0, nil
+		},
+	}
+
+	p := &cliProvider{
+		runner: runner,
+		cfg:    Config{},
+		log:    log.TestLogger(t),
+	}
+
+	ins, err := p.InspectContainer(context.Background(), fakeCID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if ins == nil {
+		t.Fatal("expected inspect result to be non-nil")
+	}
+
+	if ins.ID != fakeCID {
+		t.Errorf("got ID %q, want %q", ins.ID, fakeCID)
+	}
+
+	if ins.State.Status != "running" {
+		t.Errorf("got status %q, want 'running'", ins.State.Status)
+	}
+
+	if len(capturedArgs) != 2 || capturedArgs[0] != "inspect" || capturedArgs[1] != fakeCID {
+		t.Errorf("unexpected args: %v", capturedArgs)
+	}
+}

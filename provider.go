@@ -172,7 +172,18 @@ func (p *cliProvider) DeleteContainer(ctx context.Context, id string, force bool
 
 // InspectContainer returns metadata of a container.
 func (p *cliProvider) InspectContainer(ctx context.Context, id string) (*Inspect, error) {
-	return nil, nil
+	if id == "" {
+		return nil, fmt.Errorf("applecontainer: cannot inspect empty container ID")
+	}
+	stdout, _, _, err := p.runner.Run(ctx, []string{"inspect", id}, nil)
+	if err != nil {
+		return nil, fmt.Errorf("applecontainer: inspect container %s failed: %w", id, err)
+	}
+	ins, err := parseInspect(stdout)
+	if err != nil {
+		return nil, err
+	}
+	return ins, nil
 }
 
 // ContainerLogs returns reader for container logs.
