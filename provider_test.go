@@ -284,8 +284,8 @@ func TestInspectContainer(t *testing.T) {
 		t.Errorf("got ID %q, want %q", ins.ID, fakeCID)
 	}
 
-	if ins.State.Status != "running" {
-		t.Errorf("got status %q, want 'running'", ins.State.Status)
+	if ins.Status != "running" {
+		t.Errorf("got status %q, want 'running'", ins.Status)
 	}
 
 	if len(capturedArgs) != 2 || capturedArgs[0] != "inspect" || capturedArgs[1] != fakeCID {
@@ -316,7 +316,7 @@ func TestContainerLogs(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		defer rc.Close()
+		defer func() { _ = rc.Close() }()
 
 		data, err := io.ReadAll(rc)
 		if err != nil {
@@ -547,7 +547,7 @@ func TestCopyFileFromContainer(t *testing.T) {
 	if !ok {
 		t.Fatal("expected returned reader to be *tempFileReadCloser")
 	}
-	tempFilePath := tempFileObj.File.Name()
+	tempFilePath := tempFileObj.Name()
 
 	if _, err := os.Stat(tempFilePath); os.IsNotExist(err) {
 		t.Error("expected temp file to exist before Close")

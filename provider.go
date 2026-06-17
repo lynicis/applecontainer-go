@@ -3,7 +3,6 @@ package applecontainer
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -11,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	json "github.com/goccy/go-json"
 
 	"github.com/lynicis/applecontainer-go/log"
 )
@@ -321,7 +322,7 @@ func (p *cliProvider) CopyFileFromContainer(ctx context.Context, id, path string
 		return nil, fmt.Errorf("applecontainer: failed to create temporary file for copy: %w", err)
 	}
 	tmpPath := tmpFile.Name()
-	tmpFile.Close()
+	_ = tmpFile.Close()
 	cleanup := true
 	defer func() {
 		if cleanup {

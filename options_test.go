@@ -211,7 +211,7 @@ func TestMergeRequest(t *testing.T) {
 	req := &ContainerRequest{
 		WaitingFor: s1,
 	}
-	WithAdditionalWaitStrategy(s2).Customize(req)
+	_ = WithAdditionalWaitStrategy(s2).Customize(req)
 
 	composite, ok := req.WaitingFor.(*wait.ForAllStrategy)
 	if !ok {

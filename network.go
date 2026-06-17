@@ -3,7 +3,6 @@ package applecontainer
 import (
 	"context"
 	"fmt"
-	"math/rand"
 )
 
 // Network represents a container network.
@@ -97,12 +96,7 @@ func WithSubnetV6(subnet string) NetworkOption {
 }
 
 func generateNetworkName() string {
-	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
-	b := make([]byte, 8)
-	for i := range b {
-		b[i] = letters[rand.Intn(len(letters))]
-	}
-	return "apple-net-" + string(b)
+	return randomString("apple-net-")
 }
 
 // NewNetwork creates a network.

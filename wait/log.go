@@ -62,7 +62,7 @@ func (s *LogStrategy) WaitUntilReady(ctx context.Context, target StrategyTarget)
 	if err != nil {
 		return fmt.Errorf("failed to get target logs: %w", err)
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 
 	var re *regexp.Regexp
 	if s.IsRegexp {

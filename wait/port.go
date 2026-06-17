@@ -80,7 +80,7 @@ func (s *PortStrategy) WaitUntilReady(ctx context.Context, target StrategyTarget
 			dialer := net.Dialer{}
 			conn, err := dialer.DialContext(ctx, proto, address)
 			if err == nil {
-				conn.Close()
+				_ = conn.Close()
 				return nil
 			}
 		}

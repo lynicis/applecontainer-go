@@ -1,0 +1,31 @@
+version: "2"
+run:
+  issues-exit-code: 1
+  tests: true
+linters:
+  enable:
+    - misspell
+  settings:
+    misspell:
+      locale: US
+      ignore-rules:
+        - strat
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

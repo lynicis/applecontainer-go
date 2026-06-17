@@ -4,9 +4,10 @@ package applecontainer
 // (`container inspect <id>` and `container list --format json` share this shape).
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
+
+	json "github.com/goccy/go-json"
 )
 
 // Inspect is the parsed result of `container inspect <id>` and

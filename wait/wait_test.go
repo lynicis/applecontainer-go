@@ -149,7 +149,7 @@ func TestForListeningPort(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to listen: %v", err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	_, portStr, err := net.SplitHostPort(listener.Addr().String())
 	if err != nil {
@@ -176,7 +176,7 @@ func TestForListeningPort(t *testing.T) {
 func TestForHTTP(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ok"))
+		_, _ = w.Write([]byte("ok"))
 	}))
 	defer server.Close()
 
@@ -211,7 +211,7 @@ func TestForExec(t *testing.T) {
 
 	strat := ForExec([]string{"check"}).WithResponseMatcher(func(r io.Reader) bool {
 		buf := new(bytes.Buffer)
-		buf.ReadFrom(r)
+		_, _ = buf.ReadFrom(r)
 		return strings.Contains(buf.String(), "ready-output")
 	})
 

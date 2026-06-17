@@ -3,7 +3,6 @@ package applecontainer
 import (
 	"context"
 	"fmt"
-	"math/rand"
 )
 
 // Volume represents a container volume.
@@ -76,12 +75,7 @@ func WithVolumeOpt(key, val string) VolumeOption {
 }
 
 func generateVolumeName() string {
-	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
-	b := make([]byte, 8)
-	for i := range b {
-		b[i] = letters[rand.Intn(len(letters))]
-	}
-	return "apple-vol-" + string(b)
+	return randomString("apple-vol-")
 }
 
 // NewVolume creates a volume.

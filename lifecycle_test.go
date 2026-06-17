@@ -83,11 +83,11 @@ func TestExecuteLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 	if _, err := tmpFile.Write([]byte("hello world")); err != nil {
 		t.Fatalf("failed to write to temp file: %v", err)
 	}
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	var createCalled, startCalled bool
 	var copiedData []byte

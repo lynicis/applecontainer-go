@@ -3,16 +3,10 @@ package applecontainer
 import (
 	"context"
 	"fmt"
-	"math/rand"
 )
 
 func generateBuildTag() string {
-	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
-	b := make([]byte, 8)
-	for i := range b {
-		b[i] = letters[rand.Intn(len(letters))]
-	}
-	return "applecontainer-" + string(b)
+	return randomString("applecontainer-")
 }
 
 func defaultBuildHook(ctx context.Context, r *ContainerRequest, c *cliContainer) error {

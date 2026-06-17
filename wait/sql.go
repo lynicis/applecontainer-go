@@ -78,7 +78,7 @@ func (s *SQLStrategy) WaitUntilReady(ctx context.Context, target StrategyTarget)
 
 			// We need to execute the query and ensure it works
 			err = func() error {
-				defer db.Close()
+				defer func() { _ = db.Close() }()
 				connCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 				defer cancel()
 
@@ -90,7 +90,7 @@ func (s *SQLStrategy) WaitUntilReady(ctx context.Context, target StrategyTarget)
 				if err != nil {
 					return err
 				}
-				rows.Close()
+				_ = rows.Close()
 				return nil
 			}()
 

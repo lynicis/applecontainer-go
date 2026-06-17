@@ -49,7 +49,7 @@ func (s *FileStrategy) WaitUntilReady(ctx context.Context, target StrategyTarget
 		case <-ticker.C:
 			rc, err := target.CopyFileFromContainer(ctx, s.Path)
 			if err == nil {
-				rc.Close()
+				_ = rc.Close()
 				return nil
 			}
 		}

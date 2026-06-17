@@ -158,7 +158,7 @@ func (s *HTTPStrategy) WaitUntilReady(ctx context.Context, target StrategyTarget
 			if ok && s.ResponseMatcher != nil {
 				ok = s.ResponseMatcher(resp.Body)
 			}
-			resp.Body.Close()
+			_ = resp.Body.Close()
 
 			if ok {
 				return nil
