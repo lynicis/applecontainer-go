@@ -3,6 +3,7 @@ package applecontainer
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"reflect"
 	"strings"
@@ -289,4 +290,15 @@ func (w waitTarget) StateStatus(ctx context.Context) (string, error) {
 
 func (w waitTarget) StateExitCode(ctx context.Context) (int, error) {
 	return w.cliContainer.StateExitCode(ctx)
+}
+
+func (w waitTarget) Logs(ctx context.Context) (io.ReadCloser, error) {
+	if w.cliContainer.logFanout != nil {
+		return w.cliContainer.logFanout.NewReader(ctx)
+	}
+	return w.cliContainer.provider.ContainerLogs(ctx, w.cliContainer.id, true, 0)
+}
+
+func (w waitTarget) CopyFileFromContainer(ctx context.Context, path string) (io.ReadCloser, error) {
+	return w.cliContainer.CopyFileFromContainer(ctx, path)
 }
