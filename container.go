@@ -211,7 +211,6 @@ var _ Container = (*cliContainer)(nil)
 type TerminateOption func(*terminateOptions)
 
 type terminateOptions struct {
-	// Stub options for now
 }
 
 // ContainerRequestHook defines a hook triggered with the container request.
@@ -235,8 +234,6 @@ type ContainerLifecycleHooks struct {
 	PostTerminates []ContainerHook
 }
 
-
-
 // GetContainerID returns the ID of the container.
 func (c *cliContainer) GetContainerID() string {
 	return c.id
@@ -257,10 +254,10 @@ func (c *cliContainer) ContainerIP(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if len(ins.State.Networks) == 0 {
+	if len(ins.Networks) == 0 {
 		return "", fmt.Errorf("applecontainer: no networks found for container %s", c.id)
 	}
-	ip := ins.State.Networks[0].IPv4()
+	ip := ins.Networks[0].IPv4()
 	if ip == "" {
 		return "", fmt.Errorf("applecontainer: empty IP address for container %s", c.id)
 	}
@@ -380,9 +377,8 @@ func (c *cliContainer) Stop(ctx context.Context, timeout *time.Duration) error {
 func (c *cliContainer) Terminate(ctx context.Context, opts ...TerminateOption) error {
 	c.isRunning.Store(false)
 
-	stopErr := c.provider.StopContainer(ctx, c.id, nil)
-	if stopErr != nil && !isNotFoundError(stopErr) {
-		// We can log or handle stop errors, but typically we want to try deleting anyway.
+	if stopErr := c.provider.StopContainer(ctx, c.id, nil); stopErr != nil && !isNotFoundError(stopErr) {
+		c.log.Printf("applecontainer: stop failed during terminate: %v", stopErr)
 	}
 
 	delErr := c.provider.DeleteContainer(ctx, c.id, true)
@@ -429,13 +425,12 @@ func (c *cliContainer) Networks(ctx context.Context) ([]string, error) {
 		return nil, err
 	}
 	var networks []string
-	for _, net := range ins.State.Networks {
+	for _, net := range ins.Networks {
 		networks = append(networks, net.Network)
 	}
 	return networks, nil
 }
 
-// Helper to parse port number and protocol from a port string (e.g. "80/tcp" or "80").
 func parsePort(port string) (int, string) {
 	parts := strings.Split(port, "/")
 	pNum, _ := strconv.Atoi(parts[0])
@@ -446,7 +441,6 @@ func parsePort(port string) (int, string) {
 	return pNum, proto
 }
 
-// Helper to identify if an error is a "not found" or similar error.
 func isNotFoundError(err error) bool {
 	if err == nil {
 		return false

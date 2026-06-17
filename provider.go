@@ -81,8 +81,8 @@ func (p *cliProvider) CreateContainer(ctx context.Context, req *ContainerRequest
 		return nil, fmt.Errorf("applecontainer: failed to create cidfile: %w", err)
 	}
 	cidFile := tmpFile.Name()
-	tmpFile.Close()
-	defer os.Remove(cidFile)
+	_ = tmpFile.Close()
+	defer func() { _ = os.Remove(cidFile) }()
 
 	args, err := buildCreateArgs(req, cidFile)
 	if err != nil {
@@ -277,13 +277,13 @@ func (p *cliProvider) CopyToContainer(ctx context.Context, id, containerPath str
 		return fmt.Errorf("applecontainer: failed to create temporary file for copy: %w", err)
 	}
 	tmpPath := tmpFile.Name()
-	defer os.Remove(tmpPath)
+	defer func() { _ = os.Remove(tmpPath) }()
 
 	if _, err := tmpFile.Write(content); err != nil {
-		tmpFile.Close()
+		_ = tmpFile.Close()
 		return fmt.Errorf("applecontainer: failed to write content to temp file: %w", err)
 	}
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	if err := os.Chmod(tmpPath, os.FileMode(mode)); err != nil {
 		return fmt.Errorf("applecontainer: failed to chmod temp file: %w", err)
@@ -303,7 +303,7 @@ type tempFileReadCloser struct {
 
 func (t *tempFileReadCloser) Close() error {
 	err := t.File.Close()
-	_ = os.Remove(t.File.Name())
+	_ = os.Remove(t.Name())
 	return err
 }
 

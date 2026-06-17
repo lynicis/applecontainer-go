@@ -118,8 +118,8 @@ func TestExecuteLifecycle(t *testing.T) {
 					// cp <hostPath> <containerPath>
 					if len(args) >= 3 {
 						copiedPath = args[2]
-						if strings.HasPrefix(copiedPath, "fake-lifecycle-cid:") {
-							copiedPath = strings.TrimPrefix(copiedPath, "fake-lifecycle-cid:")
+						if after, ok := strings.CutPrefix(copiedPath, "fake-lifecycle-cid:"); ok {
+							copiedPath = after
 						}
 						hostPath := args[1]
 						data, err := os.ReadFile(hostPath)

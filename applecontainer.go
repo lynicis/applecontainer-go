@@ -2,6 +2,7 @@ package applecontainer
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
@@ -109,4 +110,15 @@ func GenericLabels() map[string]string {
 		"applecontainer":         "true",
 		"applecontainer.session": SessionID(),
 	}
+}
+
+// randomString generates a cryptographically secure random string with the given prefix.
+func randomString(prefix string) string {
+	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
+	b := make([]byte, 8)
+	_, _ = rand.Read(b)
+	for i := range b {
+		b[i] = letters[int(b[i])%len(letters)]
+	}
+	return prefix + string(b)
 }

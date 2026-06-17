@@ -208,8 +208,6 @@ func mergeRequest(dst, src *ContainerRequest) {
 	}
 }
 
-// Basic options
-
 // WithImage sets the image reference to run.
 func WithImage(image string) ContainerCustomizer {
 	return CustomizeRequestOption(func(req *ContainerRequest) error {
@@ -324,8 +322,6 @@ func WithAdditionalWaitStrategy(s wait.Strategy) ContainerCustomizer {
 	})
 }
 
-// Resources options
-
 // WithCPUs sets the number of CPUs allocated to the container.
 func WithCPUs(cpus float64) ContainerCustomizer {
 	return CustomizeRequestOption(func(req *ContainerRequest) error {
@@ -366,8 +362,6 @@ func WithUlimits(ulimits ...Ulimit) ContainerCustomizer {
 	})
 }
 
-// Process options
-
 // WithWorkingDir sets the working directory.
 func WithWorkingDir(workingDir string) ContainerCustomizer {
 	return CustomizeRequestOption(func(req *ContainerRequest) error {
@@ -395,12 +389,9 @@ func WithInit(init bool) ContainerCustomizer {
 // WithEnvFile stubs loading variables from an env file.
 func WithEnvFile(filePath string) ContainerCustomizer {
 	return CustomizeRequestOption(func(req *ContainerRequest) error {
-		// Env file handling stub
 		return nil
 	})
 }
-
-// Network options
 
 // WithNetworks appends container networks.
 func WithNetworks(networks ...string) ContainerCustomizer {
@@ -409,8 +400,6 @@ func WithNetworks(networks ...string) ContainerCustomizer {
 		return nil
 	})
 }
-
-
 
 // WithNetworkName sets container network name.
 func WithNetworkName(network string) ContainerCustomizer {
@@ -459,8 +448,6 @@ func WithHostPortMapping(mapping bool) ContainerCustomizer {
 		return nil
 	})
 }
-
-// Storage options
 
 // WithMounts appends container mounts.
 func WithMounts(mounts ...Mount) ContainerCustomizer {
@@ -515,8 +502,6 @@ func WithFiles(files ...ContainerFile) ContainerCustomizer {
 	})
 }
 
-// Apple options
-
 // WithRosetta enables Rosetta 2 emulation.
 func WithRosetta(rosetta bool) ContainerCustomizer {
 	return CustomizeRequestOption(func(req *ContainerRequest) error {
@@ -565,8 +550,6 @@ func WithAlwaysPull(alwaysPull bool) ContainerCustomizer {
 	})
 }
 
-// Build options
-
 // WithContainerfile sets options for building from a Containerfile.
 func WithContainerfile(cf FromContainerfile) ContainerCustomizer {
 	return CustomizeRequestOption(func(req *ContainerRequest) error {
@@ -574,8 +557,6 @@ func WithContainerfile(cf FromContainerfile) ContainerCustomizer {
 		return nil
 	})
 }
-
-// Lifecycle options
 
 // WithLifecycleHooks appends lifecycle hooks.
 func WithLifecycleHooks(hooks ContainerLifecycleHooks) ContainerCustomizer {
@@ -601,8 +582,6 @@ func WithAdditionalLifecycleHooks(hooks ContainerLifecycleHooks) ContainerCustom
 	return WithLifecycleHooks(hooks)
 }
 
-// Logging options
-
 // WithLogConsumers registers log consumers.
 func WithLogConsumers(consumers ...LogConsumer) ContainerCustomizer {
 	return CustomizeRequestOption(func(req *ContainerRequest) error {
@@ -620,8 +599,6 @@ func WithLogger(logger any) ContainerCustomizer {
 		return nil
 	})
 }
-
-// Escape options
 
 // WithCLIArgsModifier chains or sets custom argument modifiers.
 func WithCLIArgsModifier(modifier CLIArgsModifier) ContainerCustomizer {

@@ -26,4 +26,3 @@ type StrategyTarget interface {
 type StrategyTimeout interface {
 	Timeout() time.Duration
 }
-

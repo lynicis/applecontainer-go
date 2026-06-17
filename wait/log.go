@@ -12,11 +12,11 @@ import (
 
 // LogStrategy waits for a specific log pattern to appear in the container's logs.
 type LogStrategy struct {
-	Pattern      string
-	Occurrence   int
-	IsRegexp     bool
+	Pattern        string
+	Occurrence     int
+	IsRegexp       bool
 	startupTimeout time.Duration
-	PollInterval time.Duration
+	PollInterval   time.Duration
 }
 
 // Timeout returns the custom timeout for this strategy.
