@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/lynicis/applecontainer-go/log"
+	"github.com/lynicis/applecontainer-go/wait"
 )
 
 // Container defines the interface for interacting with a container.
@@ -131,20 +132,8 @@ type Ulimit struct {
 	Hard int64  `json:"hard"`
 }
 
-// WaitingFor defines the interface for container wait strategies.
-type WaitingFor interface {
-	WaitUntilReady(ctx context.Context, target StrategyTarget) error
-}
-
-// StrategyTarget defines the interface exposed to wait strategies.
-type StrategyTarget interface {
-	Host(ctx context.Context) (string, error)
-	MappedPort(ctx context.Context, port string) (int, error)
-	Logs(ctx context.Context) (io.ReadCloser, error)
-	Exec(ctx context.Context, cmd []string, opts ...ProcessOption) (int, []byte, error)
-	Inspect(ctx context.Context) (*Inspect, error)
-	State(ctx context.Context) (*State, error)
-}
+// WaitingFor is an alias for wait.Strategy.
+type WaitingFor = wait.Strategy
 
 // Log represents a log message.
 type Log struct {
@@ -295,7 +284,7 @@ func (c *cliContainer) MappedPort(ctx context.Context, port string) (int, error)
 		return 0, err
 	}
 	for _, p := range ins.Configuration.PublishedPorts {
-		if p.ContainerPort == pNum && (proto == "" || strings.ToLower(p.Proto) == strings.ToLower(proto)) {
+		if p.ContainerPort == pNum && (proto == "" || strings.EqualFold(p.Proto, proto)) {
 			return p.HostPort, nil
 		}
 	}
@@ -340,6 +329,24 @@ func (c *cliContainer) State(ctx context.Context) (*State, error) {
 		return nil, err
 	}
 	return &ins.State, nil
+}
+
+// StateStatus returns the container's status string.
+func (c *cliContainer) StateStatus(ctx context.Context) (string, error) {
+	s, err := c.State(ctx)
+	if err != nil {
+		return "", err
+	}
+	return s.Status, nil
+}
+
+// StateExitCode returns the container's exit code.
+func (c *cliContainer) StateExitCode(ctx context.Context) (int, error) {
+	s, err := c.State(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return s.ExitCode, nil
 }
 
 // IsRunning returns whether the container is running according to local memory state.

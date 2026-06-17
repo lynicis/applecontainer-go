@@ -51,6 +51,7 @@ type State struct {
 	Networks    []NetworkInfo `json:"networks"`
 	StartedDate string        `json:"startedDate"`
 	Status      string        `json:"state"`
+	ExitCode    int           `json:"exitCode"`
 }
 
 // NetworkInfo is one entry under status.networks carrying the assigned IP.
