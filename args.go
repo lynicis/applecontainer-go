@@ -1,32 +1,11 @@
 package applecontainer
 
 import (
-	"crypto/sha1"
-	"encoding/hex"
 	"fmt"
 	"net"
-	"os"
 	"strconv"
 	"strings"
-	"sync"
-	"time"
 )
-
-var (
-	sessionID   string
-	sessionOnce sync.Once
-)
-
-// SessionID returns a stable session identifier for the current test/run process.
-func SessionID() string {
-	sessionOnce.Do(func() {
-		pid := os.Getppid()
-		now := time.Now().UnixNano()
-		hash := sha1.Sum([]byte(fmt.Sprintf("applecontainer-go:%d:%d", pid, now)))
-		sessionID = hex.EncodeToString(hash[:])
-	})
-	return sessionID
-}
 
 // allocateEphemeralPort allocates a free port on 127.0.0.1.
 func allocateEphemeralPort() (int, error) {

@@ -60,9 +60,15 @@ type cliProvider struct {
 
 var _ ContainerProvider = (*cliProvider)(nil)
 
+var providerRunnerOverride commandRunner
+
 func newCLIProvider(cfg Config) *cliProvider {
+	runner := cfg.runner()
+	if providerRunnerOverride != nil {
+		runner = providerRunnerOverride
+	}
 	return &cliProvider{
-		runner: cfg.runner(),
+		runner: runner,
 		cfg:    cfg,
 		log:    log.Default(),
 	}
