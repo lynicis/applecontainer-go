@@ -503,3 +503,72 @@ func TestCopyToContainer(t *testing.T) {
 		t.Errorf("expected destination %q, got %q", expectedDest, capturedArgs[2])
 	}
 }
+
+func TestCopyFileFromContainer(t *testing.T) {
+	fakeCID := "test-container-id"
+	var capturedArgs []string
+
+	runner := &fakeRunner{
+		runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
+			capturedArgs = args
+			// Simulate container cp by writing fake content to the destination path
+			if len(args) == 3 && args[0] == "cp" {
+				destPath := args[2]
+				if err := os.WriteFile(destPath, []byte("retrieved file content"), 0644); err != nil {
+					return nil, nil, -1, err
+				}
+			}
+			return nil, nil, 0, nil
+		},
+	}
+
+	p := &cliProvider{
+		runner: runner,
+		cfg:    Config{},
+		log:    log.TestLogger(t),
+	}
+
+	rc, err := p.CopyFileFromContainer(context.Background(), fakeCID, "/app/config.json")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, err := io.ReadAll(rc)
+	if err != nil {
+		t.Fatalf("failed to read from reader: %v", err)
+	}
+
+	if string(data) != "retrieved file content" {
+		t.Errorf("got content %q, want retrieved file content", string(data))
+	}
+
+	// Verify file is deleted on Close
+	tempFileObj, ok := rc.(*tempFileReadCloser)
+	if !ok {
+		t.Fatal("expected returned reader to be *tempFileReadCloser")
+	}
+	tempFilePath := tempFileObj.File.Name()
+
+	if _, err := os.Stat(tempFilePath); os.IsNotExist(err) {
+		t.Error("expected temp file to exist before Close")
+	}
+
+	if err := rc.Close(); err != nil {
+		t.Fatalf("failed to close reader: %v", err)
+	}
+
+	if _, err := os.Stat(tempFilePath); !os.IsNotExist(err) {
+		t.Error("expected temp file to be deleted after Close")
+	}
+
+	if len(capturedArgs) != 3 {
+		t.Fatalf("expected 3 args, got %v", capturedArgs)
+	}
+	if capturedArgs[0] != "cp" {
+		t.Errorf("expected command 'cp', got %q", capturedArgs[0])
+	}
+	expectedSrc := fakeCID + ":/app/config.json"
+	if capturedArgs[1] != expectedSrc {
+		t.Errorf("expected source %q, got %q", expectedSrc, capturedArgs[1])
+	}
+}

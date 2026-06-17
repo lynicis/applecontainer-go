@@ -302,9 +302,51 @@ func (p *cliProvider) CopyToContainer(ctx context.Context, id, containerPath str
 	return nil
 }
 
+type tempFileReadCloser struct {
+	*os.File
+}
+
+func (t *tempFileReadCloser) Close() error {
+	err := t.File.Close()
+	_ = os.Remove(t.File.Name())
+	return err
+}
+
 // CopyFileFromContainer copies a file from a container.
 func (p *cliProvider) CopyFileFromContainer(ctx context.Context, id, path string) (io.ReadCloser, error) {
-	return nil, nil
+	if id == "" {
+		return nil, fmt.Errorf("applecontainer: cannot copy from empty container ID")
+	}
+	if path == "" {
+		return nil, fmt.Errorf("applecontainer: cannot copy empty path from container")
+	}
+
+	tmpFile, err := os.CreateTemp("", "applecontainer-copyfrom-*")
+	if err != nil {
+		return nil, fmt.Errorf("applecontainer: failed to create temporary file for copy: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+	tmpFile.Close()
+	cleanup := true
+	defer func() {
+		if cleanup {
+			_ = os.Remove(tmpPath)
+		}
+	}()
+
+	args := []string{"cp", fmt.Sprintf("%s:%s", id, path), tmpPath}
+	_, _, _, err = p.runner.Run(ctx, args, nil)
+	if err != nil {
+		return nil, fmt.Errorf("applecontainer: copy from container failed: %w", err)
+	}
+
+	f, err := os.Open(tmpPath)
+	if err != nil {
+		return nil, fmt.Errorf("applecontainer: failed to open copied file: %w", err)
+	}
+
+	cleanup = false
+	return &tempFileReadCloser{File: f}, nil
 }
 
 // ImagePull pulls an image from a registry.
