@@ -2,6 +2,7 @@ package applecontainer
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -453,5 +454,52 @@ func TestExecContainer(t *testing.T) {
 		if v != expectedArgsWithOptions[i] {
 			t.Errorf("got %q, want %q", v, expectedArgsWithOptions[i])
 		}
+	}
+}
+
+func TestCopyToContainer(t *testing.T) {
+	fakeCID := "test-container-id"
+	var capturedArgs []string
+
+	runner := &fakeRunner{
+		runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
+			capturedArgs = args
+			// We can verify that the source file in args exists and has the expected content
+			if len(args) == 3 && args[0] == "cp" {
+				srcFile := args[1]
+				data, err := os.ReadFile(srcFile)
+				if err != nil {
+					return nil, nil, -1, err
+				}
+				if string(data) != "fake file content" {
+					return nil, nil, -1, fmt.Errorf("unexpected content: %q", string(data))
+				}
+			}
+			return nil, nil, 0, nil
+		},
+	}
+
+	p := &cliProvider{
+		runner: runner,
+		cfg:    Config{},
+		log:    log.TestLogger(t),
+	}
+
+	err := p.CopyToContainer(context.Background(), fakeCID, "/app/config.json", []byte("fake file content"), 0644)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(capturedArgs) != 3 {
+		t.Fatalf("expected 3 args, got %v", capturedArgs)
+	}
+
+	if capturedArgs[0] != "cp" {
+		t.Errorf("expected command 'cp', got %q", capturedArgs[0])
+	}
+
+	expectedDest := fakeCID + ":/app/config.json"
+	if capturedArgs[2] != expectedDest {
+		t.Errorf("expected destination %q, got %q", expectedDest, capturedArgs[2])
 	}
 }
