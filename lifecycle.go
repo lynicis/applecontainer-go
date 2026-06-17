@@ -293,7 +293,7 @@ func (w waitTarget) StateExitCode(ctx context.Context) (int, error) {
 }
 
 func (w waitTarget) Logs(ctx context.Context) (io.ReadCloser, error) {
-	if w.cliContainer.logFanout != nil {
+	if w.cliContainer.logFanout != nil && w.cliContainer.logFanout.started {
 		return w.cliContainer.logFanout.NewReader(ctx)
 	}
 	return w.cliContainer.provider.ContainerLogs(ctx, w.cliContainer.id, true, 0)
