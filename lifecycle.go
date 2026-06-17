@@ -122,19 +122,16 @@ func defaultLoggingHooks(logger log.Logger) ContainerLifecycleHooks {
 func defaultHooks(req *ContainerRequest, c *cliContainer) ContainerLifecycleHooks {
 	var hooks ContainerLifecycleHooks
 
-	// 1. Logging hooks
 	logHooks := defaultLoggingHooks(c.log)
 	hooks = combineContainerHooks(hooks, logHooks)
 
-	// 2. PreBuild: run build from containerfile
 	hooks.PreBuilds = append(hooks.PreBuilds, func(ctx context.Context, r *ContainerRequest) error {
 		if r.FromContainerfile.Context != "" {
-			// Image build logic stub (Phase 9)
+			return defaultBuildHook(ctx, r, c)
 		}
 		return nil
 	})
 
-	// 3. PreCreate: create container
 	hooks.PreCreates = append(hooks.PreCreates, func(ctx context.Context, r *ContainerRequest) error {
 		if c.id == "" {
 			created, err := c.provider.CreateContainer(ctx, r)
@@ -146,7 +143,6 @@ func defaultHooks(req *ContainerRequest, c *cliContainer) ContainerLifecycleHook
 		return nil
 	})
 
-	// 4. PostCreate: copy files to container
 	hooks.PostCreates = append(hooks.PostCreates, func(ctx context.Context, r *ContainerRequest) error {
 		for _, file := range r.Files {
 			content, err := os.ReadFile(file.HostFilePath)
@@ -160,7 +156,6 @@ func defaultHooks(req *ContainerRequest, c *cliContainer) ContainerLifecycleHook
 		return nil
 	})
 
-	// 5. PostStart: log consumers start
 	hooks.PostStarts = append(hooks.PostStarts, func(ctx context.Context, ctr Container) error {
 		if c.logFanout == nil {
 			c.logFanout = &logFanout{}
@@ -168,7 +163,6 @@ func defaultHooks(req *ContainerRequest, c *cliContainer) ContainerLifecycleHook
 		return c.logFanout.Start(ctx, c)
 	})
 
-	// 6. PostStart: wait strategy
 	hooks.PostStarts = append(hooks.PostStarts, func(ctx context.Context, ctr Container) error {
 		if r := c.req; r.WaitingFor != nil {
 			if err := r.WaitingFor.WaitUntilReady(ctx, waitTarget{c}); err != nil {
@@ -179,7 +173,6 @@ func defaultHooks(req *ContainerRequest, c *cliContainer) ContainerLifecycleHook
 		return nil
 	})
 
-	// 7. PostStop: log consumers stop
 	hooks.PostStops = append(hooks.PostStops, func(ctx context.Context, ctr Container) error {
 		if c.logFanout != nil {
 			_ = c.logFanout.Stop()
@@ -194,7 +187,6 @@ func defaultHooks(req *ContainerRequest, c *cliContainer) ContainerLifecycleHook
 // executeLifecycle runs the container lifecycle phases.
 func (c *cliContainer) executeLifecycle(ctx context.Context, isStart bool) error {
 	if isStart {
-		// PreBuilds
 		for _, l := range c.lifecycle {
 			for _, hook := range l.PreBuilds {
 				if err := hook(ctx, &c.req); err != nil {
@@ -202,7 +194,6 @@ func (c *cliContainer) executeLifecycle(ctx context.Context, isStart bool) error
 				}
 			}
 		}
-		// PostBuilds
 		for _, l := range c.lifecycle {
 			for _, hook := range l.PostBuilds {
 				if err := hook(ctx, &c.req); err != nil {
@@ -210,7 +201,6 @@ func (c *cliContainer) executeLifecycle(ctx context.Context, isStart bool) error
 				}
 			}
 		}
-		// PreCreates
 		for _, l := range c.lifecycle {
 			for _, hook := range l.PreCreates {
 				if err := hook(ctx, &c.req); err != nil {
@@ -218,7 +208,6 @@ func (c *cliContainer) executeLifecycle(ctx context.Context, isStart bool) error
 				}
 			}
 		}
-		// PostCreates
 		for _, l := range c.lifecycle {
 			for _, hook := range l.PostCreates {
 				if err := hook(ctx, &c.req); err != nil {
@@ -226,7 +215,6 @@ func (c *cliContainer) executeLifecycle(ctx context.Context, isStart bool) error
 				}
 			}
 		}
-		// PreStarts
 		for _, l := range c.lifecycle {
 			for _, hook := range l.PreStarts {
 				if err := hook(ctx, c); err != nil {
@@ -234,11 +222,9 @@ func (c *cliContainer) executeLifecycle(ctx context.Context, isStart bool) error
 				}
 			}
 		}
-		// Start the container
 		if err := c.provider.StartContainer(ctx, c); err != nil {
 			return err
 		}
-		// PostStarts
 		for _, l := range c.lifecycle {
 			for _, hook := range l.PostStarts {
 				if err := hook(ctx, c); err != nil {
@@ -246,7 +232,6 @@ func (c *cliContainer) executeLifecycle(ctx context.Context, isStart bool) error
 				}
 			}
 		}
-		// PostReadies
 		for _, l := range c.lifecycle {
 			for _, hook := range l.PostReadies {
 				if err := hook(ctx, c); err != nil {
@@ -255,7 +240,6 @@ func (c *cliContainer) executeLifecycle(ctx context.Context, isStart bool) error
 			}
 		}
 	} else {
-		// PreStops
 		for _, l := range c.lifecycle {
 			for _, hook := range l.PreStops {
 				if err := hook(ctx, c); err != nil {
@@ -263,8 +247,6 @@ func (c *cliContainer) executeLifecycle(ctx context.Context, isStart bool) error
 				}
 			}
 		}
-		// Stop action handled by Stop() method in container.go
-		// PostStops
 		for _, l := range c.lifecycle {
 			for _, hook := range l.PostStops {
 				if err := hook(ctx, c); err != nil {
