@@ -38,8 +38,170 @@ type Container interface {
 
 // ContainerRequest represents the parameters for creating a container.
 type ContainerRequest struct {
-	Image           string
-	HostPortMapping bool
+	Image             string
+	FromContainerfile FromContainerfile
+	AlwaysPull        bool
+	Platform          string
+	Arch              string
+	OS                string
+	Cmd               []string
+	Entrypoint        []string
+	Env               map[string]string
+	WorkingDir        string
+	User              string
+	Init              bool
+	ExposedPorts      []string
+	HostPorts         map[string]int
+	Networks          []string
+	NetworkAliases    map[string][]string
+	DNS               []string
+	DNSDomain         string
+	DNSSearch         []string
+	NoDNS             bool
+	Volumes           []VolumeMount
+	Mounts            []Mount
+	Tmpfs             map[string]string
+	ShmSize           int64
+	ReadOnlyRootfs    bool
+	Files             []ContainerFile
+	CPUs              float64
+	Memory            int64
+	CapAdd            []string
+	CapDrop           []string
+	Ulimits           []Ulimit
+	Rosetta           bool
+	Name              string
+	Labels            map[string]string
+	WaitingFor        WaitingFor
+	LifecycleHooks    ContainerLifecycleHooks
+	LogConsumerCfg    *LogConsumerCfg
+	HostPortMapping   bool
+	CLIArgsModifier   CLIArgsModifier
+}
+
+// FromContainerfile contains options for building an image from a Containerfile.
+type FromContainerfile struct {
+	Context   string             `json:"context"`
+	File      string             `json:"file"`
+	BuildArgs map[string]*string `json:"buildArgs"`
+	Tags      []string           `json:"tags"`
+	Target    string             `json:"target"`
+	Platform  string             `json:"platform"`
+	NoCache   bool               `json:"noCache"`
+	Pull      bool               `json:"pull"`
+	Secrets   map[string]string  `json:"secrets"`
+	KeepImage bool               `json:"keepImage"`
+}
+
+// ContainerFile represents a file to be copied into the container.
+type ContainerFile struct {
+	HostFilePath      string `json:"hostFilePath"`
+	ContainerFilePath string `json:"containerFilePath"`
+	FileMode          int64  `json:"fileMode"`
+}
+
+// VolumeMount represents a volume mount.
+type VolumeMount struct {
+	Source   string `json:"source"`
+	Target   string `json:"target"`
+	ReadOnly bool   `json:"readOnly"`
+}
+
+// MountType defines the type of mount.
+type MountType string
+
+const (
+	MountTypeBind   MountType = "bind"
+	MountTypeVolume MountType = "volume"
+	MountTypeTmpfs  MountType = "tmpfs"
+)
+
+// Mount represents a container mount configuration.
+type Mount struct {
+	Type     MountType `json:"type"`
+	Source   string    `json:"source"`
+	Target   string    `json:"target"`
+	ReadOnly bool      `json:"readOnly"`
+}
+
+// Ulimit represents resource limit settings.
+type Ulimit struct {
+	Name string `json:"name"`
+	Soft int64  `json:"soft"`
+	Hard int64  `json:"hard"`
+}
+
+// WaitingFor defines the interface for container wait strategies.
+type WaitingFor interface {
+	WaitUntilReady(ctx context.Context, target StrategyTarget) error
+}
+
+// StrategyTarget defines the interface exposed to wait strategies.
+type StrategyTarget interface {
+	Host(ctx context.Context) (string, error)
+	MappedPort(ctx context.Context, port string) (int, error)
+	Logs(ctx context.Context) (io.ReadCloser, error)
+	Exec(ctx context.Context, cmd []string, opts ...ProcessOption) (int, []byte, error)
+	Inspect(ctx context.Context) (*Inspect, error)
+	State(ctx context.Context) (*State, error)
+}
+
+// Log represents a log message.
+type Log struct {
+	LogType string
+	Content []byte
+}
+
+// LogConsumer defines the interface for consuming container logs.
+type LogConsumer interface {
+	Accept(Log)
+}
+
+// LogConsumerCfg holds log consumer settings.
+type LogConsumerCfg struct {
+	Consumers []LogConsumer
+}
+
+// CLIArgsModifier allows modifying the command line arguments sent to the CLI.
+type CLIArgsModifier func([]string) []string
+
+// Validate validates the container request parameters.
+func (req *ContainerRequest) Validate() error {
+	hasImage := req.Image != ""
+	hasFromContainerfile := req.FromContainerfile.Context != ""
+
+	if hasImage && hasFromContainerfile {
+		return fmt.Errorf("applecontainer: both Image and FromContainerfile are set, but only one is allowed")
+	}
+	if !hasImage && !hasFromContainerfile {
+		return fmt.Errorf("applecontainer: either Image or FromContainerfile must be set")
+	}
+
+	targets := make(map[string]bool)
+	for _, v := range req.Volumes {
+		if v.Target == "" {
+			continue
+		}
+		if targets[v.Target] {
+			return fmt.Errorf("applecontainer: duplicate mount target: %s", v.Target)
+		}
+		targets[v.Target] = true
+	}
+	for _, m := range req.Mounts {
+		if m.Target == "" {
+			continue
+		}
+		if targets[m.Target] {
+			return fmt.Errorf("applecontainer: duplicate mount target: %s", m.Target)
+		}
+		targets[m.Target] = true
+	}
+
+	if req.HostPortMapping && len(req.ExposedPorts) == 0 {
+		return fmt.Errorf("applecontainer: HostPortMapping is enabled, but ExposedPorts is empty")
+	}
+
+	return nil
 }
 
 // cliContainer implements the Container interface.
@@ -63,9 +225,25 @@ type terminateOptions struct {
 	// Stub options for now
 }
 
+// ContainerRequestHook defines a hook triggered with the container request.
+type ContainerRequestHook func(ctx context.Context, req *ContainerRequest) error
+
+// ContainerHook defines a hook triggered with the container.
+type ContainerHook func(ctx context.Context, c Container) error
+
 // ContainerLifecycleHooks defines hooks during container lifecycle phases.
 type ContainerLifecycleHooks struct {
-	// Stub hooks for now
+	PreBuilds      []ContainerRequestHook
+	PostBuilds     []ContainerRequestHook
+	PreCreates     []ContainerRequestHook
+	PostCreates    []ContainerRequestHook
+	PreStarts      []ContainerHook
+	PostStarts     []ContainerHook
+	PostReadies    []ContainerHook
+	PreStops       []ContainerHook
+	PostStops      []ContainerHook
+	PreTerminates  []ContainerHook
+	PostTerminates []ContainerHook
 }
 
 // logFanout manages streaming container logs to multiple consumers.

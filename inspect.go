@@ -30,7 +30,7 @@ type Configuration struct {
 	Image            Image             `json:"image"`
 	InitProcess      InitProcess       `json:"initProcess"`
 	Labels           map[string]string `json:"labels"`
-	Mounts           []Mount           `json:"mounts"`
+	Mounts           []InspectMount    `json:"mounts"`
 	Networks         []NetworkConfig   `json:"networks"`
 	Platform         Platform          `json:"platform"`
 	PublishedPorts   []PublishedPort   `json:"publishedPorts"`
@@ -146,20 +146,20 @@ type Resources struct {
 	MemoryInBytes int64 `json:"memoryInBytes"`
 }
 
-// Mount is one entry under configuration.mounts. Apple Container encodes the
+// InspectMount is one entry under configuration.mounts. Apple Container encodes the
 // mount driver as a tagged union (e.g. {"virtiofs": {}}); the known virtiofs
 // variant is captured and other drivers are retained as raw messages.
-type Mount struct {
-	Destination string    `json:"destination"`
-	Options     []string  `json:"options"`
-	Source      string    `json:"source"`
-	Type        MountType `json:"type"`
+type InspectMount struct {
+	Destination string           `json:"destination"`
+	Options     []string         `json:"options"`
+	Source      string           `json:"source"`
+	Type        InspectMountType `json:"type"`
 }
 
-// MountType holds the mount driver variant. VirtioFS is the only captured
+// InspectMountType holds the mount driver variant. VirtioFS is the only captured
 // variant; its inner object is kept as a raw message so unseen fields do not
 // break parsing.
-type MountType struct {
+type InspectMountType struct {
 	VirtioFS json.RawMessage `json:"virtiofs,omitempty"`
 }
 

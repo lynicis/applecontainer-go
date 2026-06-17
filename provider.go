@@ -15,7 +15,6 @@ import (
 	"github.com/lynicis/applecontainer-go/log"
 )
 
-
 // ProcessOption is a functional option for container execution.
 type ProcessOption func(*processOptions)
 

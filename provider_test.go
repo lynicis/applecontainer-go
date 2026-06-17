@@ -295,7 +295,7 @@ func TestInspectContainer(t *testing.T) {
 
 func TestContainerLogs(t *testing.T) {
 	fakeCID := "test-container-id"
-	
+
 	// Test follow = false
 	{
 		var capturedArgs []string
