@@ -572,3 +572,72 @@ func TestCopyFileFromContainer(t *testing.T) {
 		t.Errorf("expected source %q, got %q", expectedSrc, capturedArgs[1])
 	}
 }
+
+func TestImagePull(t *testing.T) {
+	var capturedArgs []string
+	runner := &fakeRunner{
+		runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
+			capturedArgs = args
+			return nil, nil, 0, nil
+		},
+	}
+
+	p := &cliProvider{
+		runner: runner,
+		cfg:    Config{},
+		log:    log.TestLogger(t),
+	}
+
+	err := p.ImagePull(context.Background(), "nginx:latest")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expectedArgs := []string{"image", "pull", "--progress", "plain", "nginx:latest"}
+	if len(capturedArgs) != len(expectedArgs) {
+		t.Fatalf("expected %d args, got %v", len(expectedArgs), capturedArgs)
+	}
+	for i, v := range capturedArgs {
+		if v != expectedArgs[i] {
+			t.Errorf("got %q, want %q", v, expectedArgs[i])
+		}
+	}
+}
+
+func TestImageInspect(t *testing.T) {
+	fakeRef := "nginx:latest"
+	mockJSON := `[{"id": "sha256:nginx-id"}]`
+	var capturedArgs []string
+
+	runner := &fakeRunner{
+		runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
+			capturedArgs = args
+			return []byte(mockJSON), nil, 0, nil
+		},
+	}
+
+	p := &cliProvider{
+		runner: runner,
+		cfg:    Config{},
+		log:    log.TestLogger(t),
+	}
+
+	ii, err := p.ImageInspect(context.Background(), fakeRef)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if ii == nil || ii.ID != "sha256:nginx-id" {
+		t.Errorf("expected ID 'sha256:nginx-id', got %v", ii)
+	}
+
+	expectedArgs := []string{"image", "inspect", fakeRef}
+	if len(capturedArgs) != len(expectedArgs) {
+		t.Fatalf("expected %d args, got %v", len(expectedArgs), capturedArgs)
+	}
+	for i, v := range capturedArgs {
+		if v != expectedArgs[i] {
+			t.Errorf("got %q, want %q", v, expectedArgs[i])
+		}
+	}
+}

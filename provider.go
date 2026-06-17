@@ -3,6 +3,7 @@ package applecontainer
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -351,12 +352,51 @@ func (p *cliProvider) CopyFileFromContainer(ctx context.Context, id, path string
 
 // ImagePull pulls an image from a registry.
 func (p *cliProvider) ImagePull(ctx context.Context, ref string, opts ...PullOption) error {
+	if ref == "" {
+		return fmt.Errorf("applecontainer: cannot pull empty image reference")
+	}
+
+	var pOpts pullOptions
+	for _, opt := range opts {
+		opt(&pOpts)
+	}
+
+	args := []string{"image", "pull", "--progress", "plain", ref}
+	_, _, _, err := p.runner.Run(ctx, args, nil)
+	if err != nil {
+		return fmt.Errorf("applecontainer: pull image %s failed: %w", ref, err)
+	}
 	return nil
 }
 
 // ImageInspect returns metadata of an image.
 func (p *cliProvider) ImageInspect(ctx context.Context, ref string) (*ImageInspect, error) {
-	return nil, nil
+	if ref == "" {
+		return nil, fmt.Errorf("applecontainer: cannot inspect empty image reference")
+	}
+
+	stdout, _, _, err := p.runner.Run(ctx, []string{"image", "inspect", ref}, nil)
+	if err != nil {
+		return nil, fmt.Errorf("applecontainer: inspect image %s failed: %w", ref, err)
+	}
+
+	ii, err := parseImageInspect(stdout)
+	if err != nil {
+		return nil, err
+	}
+	return ii, nil
+}
+
+func parseImageInspect(data []byte) (*ImageInspect, error) {
+	var arr []ImageInspect
+	if err := json.Unmarshal(data, &arr); err == nil && len(arr) > 0 {
+		return &arr[0], nil
+	}
+	var obj ImageInspect
+	if err := json.Unmarshal(data, &obj); err == nil {
+		return &obj, nil
+	}
+	return nil, fmt.Errorf("applecontainer: failed to parse image inspect JSON")
 }
 
 // Health checks the health of the container provider.
