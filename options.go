@@ -402,21 +402,15 @@ func WithEnvFile(filePath string) ContainerCustomizer {
 
 // Network options
 
-// WithNetwork appends container networks.
-func WithNetwork(networks ...string) ContainerCustomizer {
+// WithNetworks appends container networks.
+func WithNetworks(networks ...string) ContainerCustomizer {
 	return CustomizeRequestOption(func(req *ContainerRequest) error {
 		req.Networks = append(req.Networks, networks...)
 		return nil
 	})
 }
 
-// WithNewNetwork appends container network.
-func WithNewNetwork(network string) ContainerCustomizer {
-	return CustomizeRequestOption(func(req *ContainerRequest) error {
-		req.Networks = append(req.Networks, network)
-		return nil
-	})
-}
+
 
 // WithNetworkName sets container network name.
 func WithNetworkName(network string) ContainerCustomizer {
