@@ -1,0 +1,37 @@
+package applecontainer
+
+import (
+	"context"
+	"os"
+	"testing"
+)
+
+// SkipIfProviderNotHealthy checks the provider health and skips the test if not healthy.
+func SkipIfProviderNotHealthy(t testing.TB) {
+	t.Helper()
+	provider := newCLIProvider(Read())
+	if err := provider.Health(context.Background()); err != nil {
+		t.Skipf("Skipping test: container provider not healthy: %v", err)
+	}
+}
+
+// CleanupNetwork registers network deletion in t.Cleanup.
+func CleanupNetwork(t testing.TB, nw Network) {
+	t.Helper()
+	if nw == nil {
+		return
+	}
+	t.Cleanup(func() {
+		if err := nw.Remove(context.Background()); err != nil {
+			t.Logf("applecontainer: failed to remove network %q during cleanup: %v", nw.Name(), err)
+		}
+	})
+}
+
+// StdoutLogConsumer prints container logs directly to stdout.
+type StdoutLogConsumer struct{}
+
+// Accept writes the log content followed by a newline to stdout.
+func (s *StdoutLogConsumer) Accept(l Log) {
+	_, _ = os.Stdout.Write(append(l.Content, '\n'))
+}
