@@ -65,3 +65,41 @@ func TestCreateContainer(t *testing.T) {
 		t.Errorf("expected last arg to be 'nginx:latest', got %q", lastArg)
 	}
 }
+
+func TestStartContainer(t *testing.T) {
+	fakeCID := "test-container-id"
+	var capturedArgs []string
+
+	runner := &fakeRunner{
+		runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
+			capturedArgs = args
+			return nil, nil, 0, nil
+		},
+	}
+
+	p := &cliProvider{
+		runner: runner,
+		cfg:    Config{},
+		log:    log.TestLogger(t),
+	}
+
+	c := &cliContainer{
+		provider: p,
+		id:       fakeCID,
+	}
+
+	err := p.StartContainer(context.Background(), c)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(capturedArgs) != 2 {
+		t.Fatalf("expected 2 arguments, got %v", capturedArgs)
+	}
+	if capturedArgs[0] != "start" {
+		t.Errorf("expected 'start', got %q", capturedArgs[0])
+	}
+	if capturedArgs[1] != fakeCID {
+		t.Errorf("expected container ID %q, got %q", fakeCID, capturedArgs[1])
+	}
+}

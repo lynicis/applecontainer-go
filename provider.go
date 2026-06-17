@@ -110,6 +110,13 @@ func (p *cliProvider) CreateContainer(ctx context.Context, req *ContainerRequest
 
 // StartContainer starts a created container.
 func (p *cliProvider) StartContainer(ctx context.Context, c *cliContainer) error {
+	if c == nil || c.id == "" {
+		return fmt.Errorf("applecontainer: cannot start nil or empty container ID")
+	}
+	_, _, _, err := p.runner.Run(ctx, []string{"start", c.id}, nil)
+	if err != nil {
+		return fmt.Errorf("applecontainer: start container %s failed: %w", c.id, err)
+	}
 	return nil
 }
 
