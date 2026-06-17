@@ -136,7 +136,11 @@ func (c Config) runner() commandRunner { return newExecRunner(c.BinaryPath) }
 // VersionCheck runs `container --version`, parses the output, and verifies the
 // version is >= 1.0.0. Called lazily on first Run().
 func VersionCheck(ctx context.Context) (string, error) {
-	return checkVersion(ctx, Read().runner())
+	r := Read().runner()
+	if providerRunnerOverride != nil {
+		r = providerRunnerOverride
+	}
+	return checkVersion(ctx, r)
 }
 
 func checkVersion(ctx context.Context, r commandRunner) (string, error) {

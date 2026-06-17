@@ -97,6 +97,9 @@ func CleanupContainer(t testing.TB, c Container, opts ...TerminateOption) {
 // Prune runs 'container prune' to clean up unused containers, networks, and volumes.
 func Prune(ctx context.Context) error {
 	runner := Read().runner()
+	if providerRunnerOverride != nil {
+		runner = providerRunnerOverride
+	}
 	_, _, _, err := runner.Run(ctx, []string{"prune"}, nil)
 	if err != nil {
 		return fmt.Errorf("applecontainer: prune failed: %w", err)

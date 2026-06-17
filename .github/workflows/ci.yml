@@ -22,8 +22,6 @@ jobs:
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
-        with:
-          version: v1.64
 
   vulncheck:
     name: Vulnerability Scan
@@ -56,10 +54,13 @@ jobs:
           go-version: '1.26'
           cache: true
 
+      - name: Install Gosec
+        run: |
+          curl -sfL https://raw.githubusercontent.com/securego/gosec/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
+
       - name: Run Gosec Security Scanner
-        uses: securego/gosec@master
-        with:
-          args: -exclude=G104,G115,G204,G304,G401,G402,G505 ./...
+        run: |
+          $(go env GOPATH)/bin/gosec -exclude=G104,G115,G204,G304,G401,G402,G505 ./...
 
   test:
     name: Test
