@@ -122,16 +122,51 @@ func (p *cliProvider) StartContainer(ctx context.Context, c *cliContainer) error
 
 // StopContainer stops a running container.
 func (p *cliProvider) StopContainer(ctx context.Context, id string, timeout *time.Duration) error {
+	if id == "" {
+		return fmt.Errorf("applecontainer: cannot stop empty container ID")
+	}
+	secs := 5
+	if timeout != nil {
+		secs = int(timeout.Seconds())
+	}
+	_, _, _, err := p.runner.Run(ctx, []string{"stop", "--time", fmt.Sprintf("%d", secs), id}, nil)
+	if err != nil {
+		return fmt.Errorf("applecontainer: stop container %s failed: %w", id, err)
+	}
 	return nil
 }
 
 // KillContainer sends a signal to a container.
 func (p *cliProvider) KillContainer(ctx context.Context, id string, signal string) error {
+	if id == "" {
+		return fmt.Errorf("applecontainer: cannot kill empty container ID")
+	}
+	args := []string{"kill"}
+	if signal != "" {
+		args = append(args, "--signal", signal)
+	}
+	args = append(args, id)
+	_, _, _, err := p.runner.Run(ctx, args, nil)
+	if err != nil {
+		return fmt.Errorf("applecontainer: kill container %s failed: %w", id, err)
+	}
 	return nil
 }
 
 // DeleteContainer deletes a container.
 func (p *cliProvider) DeleteContainer(ctx context.Context, id string, force bool) error {
+	if id == "" {
+		return fmt.Errorf("applecontainer: cannot delete empty container ID")
+	}
+	args := []string{"delete"}
+	if force {
+		args = append(args, "--force")
+	}
+	args = append(args, id)
+	_, _, _, err := p.runner.Run(ctx, args, nil)
+	if err != nil {
+		return fmt.Errorf("applecontainer: delete container %s failed: %w", id, err)
+	}
 	return nil
 }
 
