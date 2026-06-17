@@ -28,7 +28,11 @@ type cliContainer struct {
 // ProcessOption is a functional option for container execution.
 type ProcessOption func(*processOptions)
 
-type processOptions struct{}
+type processOptions struct {
+	User       string
+	WorkingDir string
+	Env        []string
+}
 
 // PullOption is a functional option for image pulling.
 type PullOption func(*pullOptions)
@@ -239,7 +243,33 @@ func (p *cliProvider) ContainerLogs(ctx context.Context, id string, follow bool,
 
 // ExecContainer executes a command inside a running container.
 func (p *cliProvider) ExecContainer(ctx context.Context, id string, cmd []string, opts ...ProcessOption) (int, []byte, error) {
-	return 0, nil, nil
+	if id == "" {
+		return -1, nil, fmt.Errorf("applecontainer: cannot exec in empty container ID")
+	}
+	if len(cmd) == 0 {
+		return -1, nil, fmt.Errorf("applecontainer: cannot exec empty command")
+	}
+
+	var pOpts processOptions
+	for _, opt := range opts {
+		opt(&pOpts)
+	}
+
+	args := []string{"exec"}
+	if pOpts.User != "" {
+		args = append(args, "--user", pOpts.User)
+	}
+	if pOpts.WorkingDir != "" {
+		args = append(args, "--workdir", pOpts.WorkingDir)
+	}
+	for _, env := range pOpts.Env {
+		args = append(args, "--env", env)
+	}
+	args = append(args, id)
+	args = append(args, cmd...)
+
+	stdout, _, exitCode, err := p.runner.Run(ctx, args, nil)
+	return exitCode, stdout, err
 }
 
 // CopyToContainer copies data to a path inside a container.

@@ -391,3 +391,67 @@ func TestContainerLogs(t *testing.T) {
 		}
 	}
 }
+
+func TestExecContainer(t *testing.T) {
+	fakeCID := "test-container-id"
+	var capturedArgs []string
+
+	runner := &fakeRunner{
+		runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
+			capturedArgs = args
+			return []byte("output line\n"), nil, 0, nil
+		},
+	}
+
+	p := &cliProvider{
+		runner: runner,
+		cfg:    Config{},
+		log:    log.TestLogger(t),
+	}
+
+	cmd := []string{"echo", "hello"}
+	exitCode, output, err := p.ExecContainer(context.Background(), fakeCID, cmd)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if exitCode != 0 {
+		t.Errorf("got exit code %d, want 0", exitCode)
+	}
+
+	if string(output) != "output line\n" {
+		t.Errorf("got output %q", string(output))
+	}
+
+	expectedArgs := []string{"exec", fakeCID, "echo", "hello"}
+	if len(capturedArgs) != len(expectedArgs) {
+		t.Fatalf("expected %d args, got %v", len(expectedArgs), capturedArgs)
+	}
+	for i, v := range capturedArgs {
+		if v != expectedArgs[i] {
+			t.Errorf("got %q, want %q", v, expectedArgs[i])
+		}
+	}
+
+	// Test with options
+	userOpt := func(o *processOptions) {
+		o.User = "root"
+	}
+	workdirOpt := func(o *processOptions) {
+		o.WorkingDir = "/app"
+	}
+	envOpt := func(o *processOptions) {
+		o.Env = []string{"FOO=bar"}
+	}
+
+	_, _, _ = p.ExecContainer(context.Background(), fakeCID, cmd, userOpt, workdirOpt, envOpt)
+	expectedArgsWithOptions := []string{"exec", "--user", "root", "--workdir", "/app", "--env", "FOO=bar", fakeCID, "echo", "hello"}
+	if len(capturedArgs) != len(expectedArgsWithOptions) {
+		t.Fatalf("expected %d args, got %v", len(expectedArgsWithOptions), capturedArgs)
+	}
+	for i, v := range capturedArgs {
+		if v != expectedArgsWithOptions[i] {
+			t.Errorf("got %q, want %q", v, expectedArgsWithOptions[i])
+		}
+	}
+}
