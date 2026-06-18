@@ -1,40 +1,30 @@
 [
   {
-    "configuration" : {
-      "capAdd" : [
-
-      ],
-      "capDrop" : [
-
-      ],
-      "creationDate" : "2026-06-17T16:15:09Z",
-      "dns" : {
-        "nameservers" : [
-
-        ],
-        "options" : [
-
-        ],
-        "searchDomains" : [
-
-        ]
+    "configuration": {
+      "capAdd": [],
+      "capDrop": [],
+      "creationDate": "2026-06-17T16:15:09Z",
+      "dns": {
+        "nameservers": [],
+        "options": [],
+        "searchDomains": []
       },
-      "id" : "probe-mount",
-      "image" : {
-        "descriptor" : {
-          "digest" : "sha256:608a100c71651bf5b773c89083b4a1ad7ef4b2bd05d7a7e552271e03123692ad",
-          "mediaType" : "application\/vnd.oci.image.index.v1+json",
-          "size" : 10229
+      "id": "probe-mount",
+      "image": {
+        "descriptor": {
+          "digest": "sha256:608a100c71651bf5b773c89083b4a1ad7ef4b2bd05d7a7e552271e03123692ad",
+          "mediaType": "application\/vnd.oci.image.index.v1+json",
+          "size": 10229
         },
-        "reference" : "docker.io\/library\/nginx:latest"
+        "reference": "docker.io\/library\/nginx:latest"
       },
-      "initProcess" : {
-        "arguments" : [
+      "initProcess": {
+        "arguments": [
           "nginx",
           "-g",
           "daemon off;"
         ],
-        "environment" : [
+        "environment": [
           "PKG_RELEASE=1~trixie",
           "PATH=\/usr\/local\/sbin:\/usr\/local\/bin:\/usr\/sbin:\/usr\/bin:\/sbin:\/bin",
           "NGINX_VERSION=1.31.1",
@@ -43,89 +33,73 @@
           "DYNPKG_RELEASE=1~trixie",
           "NJS_RELEASE=1~trixie"
         ],
-        "executable" : "\/docker-entrypoint.sh",
-        "rlimits" : [
-
-        ],
-        "supplementalGroups" : [
-
-        ],
-        "terminal" : false,
-        "user" : {
-          "id" : {
-            "gid" : 0,
-            "uid" : 0
+        "executable": "\/docker-entrypoint.sh",
+        "rlimits": [],
+        "supplementalGroups": [],
+        "terminal": false,
+        "user": {
+          "id": {
+            "gid": 0,
+            "uid": 0
           }
         },
-        "workingDirectory" : "\/"
+        "workingDirectory": "\/"
       },
-      "labels" : {
-
-      },
-      "mounts" : [
+      "labels": {},
+      "mounts": [
         {
-          "destination" : "\/data",
-          "options" : [
-
-          ],
-          "source" : "\/tmp",
-          "type" : {
-            "virtiofs" : {
-
-            }
+          "destination": "\/data",
+          "options": [],
+          "source": "\/tmp",
+          "type": {
+            "virtiofs": {}
           }
         }
       ],
-      "networks" : [
+      "networks": [
         {
-          "network" : "default",
-          "options" : {
-            "hostname" : "probe-mount",
-            "mtu" : 1280
+          "network": "default",
+          "options": {
+            "hostname": "probe-mount",
+            "mtu": 1280
           }
         }
       ],
-      "platform" : {
-        "architecture" : "arm64",
-        "os" : "linux"
+      "platform": {
+        "architecture": "arm64",
+        "os": "linux"
       },
-      "publishedPorts" : [
-
-      ],
-      "publishedSockets" : [
-
-      ],
-      "readOnly" : false,
-      "resources" : {
-        "cpuOverhead" : 1,
-        "cpus" : 4,
-        "memoryInBytes" : 1073741824
+      "publishedPorts": [],
+      "publishedSockets": [],
+      "readOnly": false,
+      "resources": {
+        "cpuOverhead": 1,
+        "cpus": 4,
+        "memoryInBytes": 1073741824
       },
-      "rosetta" : false,
-      "runtimeHandler" : "container-runtime-linux",
-      "ssh" : false,
-      "stopSignal" : "SIGQUIT",
-      "sysctls" : {
-
-      },
-      "useInit" : false,
-      "virtualization" : false
+      "rosetta": false,
+      "runtimeHandler": "container-runtime-linux",
+      "ssh": false,
+      "stopSignal": "SIGQUIT",
+      "sysctls": {},
+      "useInit": false,
+      "virtualization": false
     },
-    "id" : "probe-mount",
-    "status" : {
-      "networks" : [
+    "id": "probe-mount",
+    "status": {
+      "networks": [
         {
-          "hostname" : "probe-mount",
-          "ipv4Address" : "192.168.64.9\/24",
-          "ipv4Gateway" : "192.168.64.1",
-          "ipv6Address" : "fd82:2ef:b840:5e62:fcfa:1cff:fe16:8ae3\/64",
-          "macAddress" : "fe:fa:1c:16:8a:e3",
-          "mtu" : 1280,
-          "network" : "default"
+          "hostname": "probe-mount",
+          "ipv4Address": "192.168.64.9\/24",
+          "ipv4Gateway": "192.168.64.1",
+          "ipv6Address": "fd82:2ef:b840:5e62:fcfa:1cff:fe16:8ae3\/64",
+          "macAddress": "fe:fa:1c:16:8a:e3",
+          "mtu": 1280,
+          "network": "default"
         }
       ],
-      "startedDate" : "2026-06-17T16:15:10Z",
-      "state" : "running"
+      "startedDate": "2026-06-17T16:15:10Z",
+      "state": "running"
     }
   }
 ]

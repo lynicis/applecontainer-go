@@ -1,1 +1,13 @@
-[{"blockReadBytes":16973824,"blockWriteBytes":8192,"cpuUsageUsec":13672,"id":"probe","memoryLimitBytes":1073741824,"memoryUsageBytes":23019520,"networkRxBytes":31446,"networkTxBytes":602,"numProcesses":6}]
+[
+    {
+        "blockReadBytes": 16973824,
+        "blockWriteBytes": 8192,
+        "cpuUsageUsec": 13672,
+        "id": "probe",
+        "memoryLimitBytes": 1073741824,
+        "memoryUsageBytes": 23019520,
+        "networkRxBytes": 31446,
+        "networkTxBytes": 602,
+        "numProcesses": 6
+    }
+]

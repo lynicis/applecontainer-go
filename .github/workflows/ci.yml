@@ -85,7 +85,7 @@ jobs:
         run: go vet ./...
 
       - name: Run unit tests
-        run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+        run: make test-coverage
 
       - name: Upload coverage report
         if: matrix.os == 'ubuntu-latest'
@@ -93,3 +93,10 @@ jobs:
         with:
           name: coverage-report
           path: coverage.out
+
+      - name: Upload coverage to Codecov
+        if: matrix.os == 'ubuntu-latest'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.out

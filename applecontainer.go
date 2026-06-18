@@ -41,7 +41,7 @@ func versionCheckOnce(ctx context.Context) error {
 }
 
 // defaultLogger resolves the logger for a container request.
-func defaultLogger(req *ContainerRequest) log.Logger {
+func defaultLogger(_ *ContainerRequest) log.Logger {
 	return log.Default()
 }
 

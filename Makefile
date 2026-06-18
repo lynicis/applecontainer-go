@@ -1,0 +1,16 @@
+.PHONY: lint test test-coverage sec vuln-check
+
+lint:
+	golanci-lint run ./...
+
+test:
+	go test -race ./...
+
+test-coverage:
+	go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+
+sec:
+	gosec ./...
+
+vuln-check:
+	govulncheck ./...

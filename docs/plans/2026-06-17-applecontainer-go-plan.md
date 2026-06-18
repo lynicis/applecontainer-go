@@ -1,7 +1,5 @@
 # applecontainer-go Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Build `github.com/lynicis/applecontainer-go`, a testcontainers-go-style Go library that spins up Apple Container (`container` CLI) Linux containers as test dependencies, with wait strategies, lifecycle hooks, and build-from-file.
 
 **Architecture:** Shell out to the `container` CLI (v1.0.0+) via a single `commandRunner` seam. Apple-native types throughout (no moby dependency). Direct container IP by default, opt-in host port mapping. `--rm` + session labels + `t.Cleanup` for teardown. Port the runtime-agnostic subsystems (wait strategies, options, hooks) from testcontainers-go near-verbatim; rewrite the Docker-specific parts (provider, reaper->simple-cleanup, port model).
@@ -669,12 +667,3 @@ Expected: zero issues. (No external linter added to keep deps clean.)
 - [ ] `container ls --all` shows no leftover test containers after a run
 - [ ] README quickstart copy-paste works end-to-end
 
----
-
-## Execution handoff
-
-Two options:
-
-**1. Subagent-driven (this session)** - I dispatch a fresh subagent per task, review between tasks, fast iteration. Uses superpowers:subagent-driven-development.
-
-**2. Parallel session (separate)** - open a new session in the worktree with superpowers:executing-plans, batch execution with checkpoints.
