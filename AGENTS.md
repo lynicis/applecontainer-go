@@ -1,0 +1,76 @@
+# 🍎 applecontainer-go — Agent Developer Guide
+
+Welcome to the **applecontainer-go** codebase. This guide outlines key workflows, testing protocols, and code intelligence tools for agentic development.
+
+---
+
+## 🛠️ Development & Validation Commands
+
+Use these commands to build, lint, and test your changes:
+
+### Build & Lint
+- **Build the project:**
+  ```bash
+  go build ./...
+  ```
+- **Run the linter:**
+  ```bash
+  golangci-lint run
+  ```
+
+### Testing
+- **Run unit tests** (mocked, no runtime dependency):
+  ```bash
+  go test ./...
+  ```
+- **Run integration tests** (requires Apple native container runtime):
+  ```bash
+  APPLECONTAINER_INTEGRATION=1 go test -tags integration -v ./examples/...
+  ```
+
+---
+
+<!-- gitnexus:start -->
+# GitNexus — Code Intelligence
+
+This project is indexed by GitNexus as **applecontainers-go** (1000 symbols, 2746 relationships, 55 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+
+> [!TIP]
+> **Index stale?** Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
+
+## 🛡️ Always Do
+
+- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
+- **MUST run `detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows. For regression review, compare against the default branch: `detect_changes({scope: "compare", base_ref: "master"})`.
+- **MUST warn the user** if impact analysis returns **HIGH** or **CRITICAL** risk before proceeding with edits.
+- When exploring unfamiliar code, use `query({query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
+- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `context({name: "symbolName"})`.
+
+## 🚫 Never Do
+
+- **NEVER** edit a function, class, or method without first running `impact` on it.
+- **NEVER** ignore **HIGH** or **CRITICAL** risk warnings from impact analysis.
+- **NEVER** rename symbols with find-and-replace — use `rename` which understands the call graph.
+- **NEVER** commit changes without running `detect_changes()` to check affected scope.
+
+## 📦 Resources
+
+| Resource | Use for |
+| :--- | :--- |
+| `gitnexus://repo/applecontainers-go/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/applecontainers-go/clusters` | All functional areas |
+| `gitnexus://repo/applecontainers-go/processes` | All execution flows |
+| `gitnexus://repo/applecontainers-go/process/{name}` | Step-by-step execution trace |
+
+## 📖 Skill Guides
+
+| Task | Read Skill File |
+| :--- | :--- |
+| **Understand architecture** / *"How does X work?"* | [exploring/SKILL.md](file:///Users/lynicis/Projects/applecontainer-go/.claude/skills/gitnexus/gitnexus-exploring/SKILL.md) |
+| **Blast radius** / *"What breaks if I change X?"* | [impact-analysis/SKILL.md](file:///Users/lynicis/Projects/applecontainer-go/.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md) |
+| **Trace bugs** / *"Why is X failing?"* | [debugging/SKILL.md](file:///Users/lynicis/Projects/applecontainer-go/.claude/skills/gitnexus/gitnexus-debugging/SKILL.md) |
+| **Rename / extract / split / refactor** | [refactoring/SKILL.md](file:///Users/lynicis/Projects/applecontainer-go/.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md) |
+| **Tools, resources, schema reference** | [guide/SKILL.md](file:///Users/lynicis/Projects/applecontainer-go/.claude/skills/gitnexus/gitnexus-guide/SKILL.md) |
+| **Index, status, clean, wiki CLI commands** | [cli/SKILL.md](file:///Users/lynicis/Projects/applecontainer-go/.claude/skills/gitnexus/gitnexus-cli/SKILL.md) |
+
+<!-- gitnexus:end -->
