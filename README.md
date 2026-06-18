@@ -2,6 +2,7 @@
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/lynicis/applecontainer-go.svg)](https://pkg.go.dev/github.com/lynicis/applecontainer-go)
 [![Go Report Card](https://goreportcard.com/badge/github.com/lynicis/applecontainer-go)](https://goreportcard.com/report/github.com/lynicis/applecontainer-go)
+[![codecov](https://codecov.io/gh/lynicis/applecontainer-go/graph/badge.svg)](https://codecov.io/gh/lynicis/applecontainer-go)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 `applecontainer-go` is a lightweight, `testcontainers-go`-style Go library designed to spin up Apple Container (`container` CLI) Linux containers as test dependencies on macOS.
