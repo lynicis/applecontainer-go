@@ -277,6 +277,9 @@ APPLECONTAINER_INTEGRATION=1 go test -tags integration -v ./examples/...
 
 We welcome issues, bug reports, and pull requests to improve `applecontainer-go`.
 
+Please read our [Contributing Guide](CONTRIBUTING.md) for details on how to set up the local development environment, run tests, and follow code quality guidelines.
+
+Briefly:
 1. Fork the repository.
 2. Create your feature branch (`git checkout -b feature/amazing-feature`).
 3. Commit your changes (`git commit -m 'Add amazing feature'`).
