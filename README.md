@@ -26,6 +26,7 @@ Unlike Docker-based libraries, `applecontainer-go` integrates directly with the 
 - [Networks and Volumes](#networks-and-volumes)
   - [Networks](#networks)
   - [Volumes](#volumes)
+- [Benchmarks](#benchmarks)
 - [Testing and Verification](#testing-and-verification)
 - [Contributing](#contributing)
 - [License](#license)
@@ -253,6 +254,69 @@ c, err := applecontainer.Run(ctx, "postgres:alpine",
 		Target: "/var/lib/postgresql/data",
 	}),
 )
+```
+
+---
+
+## Benchmarks
+
+Performance comparison: **applecontainer-go** (Apple native `container` CLI) vs **testcontainers-go** (Docker Desktop).
+
+**Hardware**: Apple M5 · macOS 26 · container CLI v1.0.0 · Docker Desktop v29.4.0
+**Method**: `benchtime=1x`, single iteration per benchmark.
+
+### Cold Start (3 images)
+
+| Container | applecontainer-go | testcontainers-go | Δ |
+| :--- | ---: | ---: | ---: |
+| nginx:alpine | 1.90s | — | — |
+| redis:alpine | 2.15s | — | — |
+| postgres:alpine | 7.46s | — | — |
+
+### Operation Latency
+
+| Operation | applecontainer-go | testcontainers-go | Δ |
+| :--- | ---: | ---: | ---: |
+| Stop | 253ms | 294ms | **1.2x faster** |
+| Start | 84ms | 260ms | **3.1x faster** |
+| Terminate | 254ms | 336ms | **1.3x faster** |
+| Inspect | 304ms | 313ms | ≈ same |
+| Exec (echo) | 341ms | 499ms | **1.5x faster** |
+| Copy 1 KB | 296ms | 301ms | ≈ same |
+| Copy 1 MB | 293ms | 302ms | ≈ same |
+
+### Network Performance
+
+| Test | applecontainer-go | testcontainers-go | Δ |
+| :--- | ---: | ---: | ---: |
+| TCP Latency (redis PING) | 296ms | 688ms | **2.3x faster** |
+| HTTP Throughput (nginx) | N/A | 2.16s | — |
+
+### Parallel Startup (nginx:alpine)
+
+| Containers | applecontainer-go | testcontainers-go | Δ |
+| ---: | ---: | ---: | ---: |
+| 2 | 1.52s | 658ms | 2.3x slower |
+| 4 | 3.39s | 1.13s | 3.0x slower |
+| 8 | 6.54s | 2.05s | 3.2x slower |
+
+### Image Operations
+
+| Test | applecontainer-go | testcontainers-go | Δ |
+| :--- | ---: | ---: | ---: |
+| Image Pull (postgres:alpine) | 6.44s | 2.05s | 3.1x slower |
+| Image Build | N/A | 16ms | — |
+
+**Key takeaways**:
+- **Start/Stop/Terminate/Exec** are significantly faster with the native Apple runtime — up to 3x for Start.
+- **Parallel scalability** is limited — the Apple CLI processes containers sequentially, while Docker runs them concurrently.
+- **Image operations** (pull, build) are slower due to the Apple CLI's image management overhead.
+- **HTTP throughput** from host is not supported in Apple's direct-IP networking model.
+
+Run benchmarks locally:
+```bash
+cd benchmarks
+APPLECONTAINER_BENCHMARK=1 go test -bench=. -benchtime=1x -tags benchmark -timeout=600s ./...
 ```
 
 ---
