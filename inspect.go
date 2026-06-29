@@ -165,23 +165,6 @@ type InspectMountType struct {
 	VirtioFS json.RawMessage `json:"virtiofs,omitempty"`
 }
 
-// ListEntry is an alias for Inspect: `container list --format json` returns
-// the same JSON array shape as `container inspect`.
-type ListEntry = Inspect
-
-// StatsEntry is one element of `container stats --format json --no-stream`.
-type StatsEntry struct {
-	BlockReadBytes   int64  `json:"blockReadBytes"`
-	BlockWriteBytes  int64  `json:"blockWriteBytes"`
-	CPUUsageUsec     int64  `json:"cpuUsageUsec"`
-	ID               string `json:"id"`
-	MemoryLimitBytes int64  `json:"memoryLimitBytes"`
-	MemoryUsageBytes int64  `json:"memoryUsageBytes"`
-	NetworkRxBytes   int64  `json:"networkRxBytes"`
-	NetworkTxBytes   int64  `json:"networkTxBytes"`
-	NumProcesses     int    `json:"numProcesses"`
-}
-
 // parseInspect parses `container inspect <id>` output (a JSON array) and
 // returns the first element. It requires a non-empty id. Unknown JSON fields
 // are ignored.
@@ -197,24 +180,4 @@ func parseInspect(data []byte) (*Inspect, error) {
 		return nil, fmt.Errorf("applecontainer: parse inspect: missing id")
 	}
 	return &arr[0], nil
-}
-
-// parseList parses `container list --format json` output (a JSON array of
-// ListEntry, identical in shape to Inspect).
-func parseList(data []byte) ([]ListEntry, error) {
-	var arr []ListEntry
-	if err := json.Unmarshal(data, &arr); err != nil {
-		return nil, fmt.Errorf("applecontainer: parse list: %w", err)
-	}
-	return arr, nil
-}
-
-// parseStats parses `container stats --format json --no-stream` output (a JSON
-// array of StatsEntry).
-func parseStats(data []byte) ([]StatsEntry, error) {
-	var arr []StatsEntry
-	if err := json.Unmarshal(data, &arr); err != nil {
-		return nil, fmt.Errorf("applecontainer: parse stats: %w", err)
-	}
-	return arr, nil
 }

@@ -147,56 +147,6 @@ func TestNetworkInfoIPv4StripsCIDR(t *testing.T) {
 	}
 }
 
-func TestParseList(t *testing.T) {
-	data, err := os.ReadFile("testdata/list.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	got, err := parseList(data)
-	if err != nil {
-		t.Fatalf("parseList: %v", err)
-	}
-	if len(got) == 0 {
-		t.Fatal("empty list")
-	}
-	if got[0].ID == "" {
-		t.Fatal("empty ID")
-	}
-	if len(got[0].Networks) == 0 {
-		t.Fatal("no networks")
-	}
-	if got[0].Status != "running" {
-		t.Fatalf("Status=%q want running", got[0].Status)
-	}
-}
-
-func TestParseStats(t *testing.T) {
-	data, err := os.ReadFile("testdata/stats.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	got, err := parseStats(data)
-	if err != nil {
-		t.Fatalf("parseStats: %v", err)
-	}
-	if len(got) != 1 {
-		t.Fatalf("len=%d want 1", len(got))
-	}
-	s := got[0]
-	if s.ID == "" {
-		t.Fatal("empty ID")
-	}
-	if s.CPUUsageUsec == 0 {
-		t.Fatal("zero cpu usage")
-	}
-	if s.MemoryUsageBytes == 0 {
-		t.Fatal("zero memory usage")
-	}
-	if s.NumProcesses == 0 {
-		t.Fatal("zero num processes")
-	}
-}
-
 func TestParseInspectErrors(t *testing.T) {
 	if _, err := parseInspect([]byte("not json")); err == nil {
 		t.Fatal("want error for bad json")
@@ -206,11 +156,5 @@ func TestParseInspectErrors(t *testing.T) {
 	}
 	if _, err := parseInspect([]byte(`[{"configuration":{}}]`)); err == nil {
 		t.Fatal("want error for missing id")
-	}
-}
-
-func TestParseStatsErrors(t *testing.T) {
-	if _, err := parseStats([]byte("not json")); err == nil {
-		t.Fatal("want error for bad json")
 	}
 }
