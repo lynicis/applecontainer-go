@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -198,7 +199,7 @@ type cliContainer struct {
 	id        string
 	image     string
 	req       ContainerRequest
-	log       log.Logger
+	log       *slog.Logger
 	isRunning atomic.Bool
 	lifecycle []ContainerLifecycleHooks
 	logFanout *logFanout
@@ -366,7 +367,7 @@ func (c *cliContainer) Terminate(ctx context.Context) error {
 	c.isRunning.Store(false)
 
 	if stopErr := c.provider.StopContainer(ctx, c.id, nil); stopErr != nil && !isNotFoundError(stopErr) {
-		c.log.Printf("applecontainer: stop failed during terminate: %v", stopErr)
+		log.Printf("applecontainer: stop failed during terminate: %v", stopErr)
 	}
 
 	delErr := c.provider.DeleteContainer(ctx, c.id, true)

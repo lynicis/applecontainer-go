@@ -65,11 +65,7 @@ func (lf *logFanout) Start(ctx context.Context, c *cliContainer) error {
 			lf.mu.RUnlock()
 		}
 		if err := scanner.Err(); err != nil {
-			if c.log != nil {
-				c.log.Printf("applecontainer: scanner error: %v", err)
-			} else {
-				log.Printf("applecontainer: scanner error: %v", err)
-			}
+			log.Printf("applecontainer: scanner error: %v", err)
 		}
 	}()
 

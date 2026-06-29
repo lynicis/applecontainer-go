@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"strconv"
@@ -50,7 +51,7 @@ type ContainerProvider interface {
 type cliProvider struct {
 	runner commandRunner
 	cfg    Config
-	log    log.Logger
+	log    *slog.Logger
 }
 
 var _ ContainerProvider = (*cliProvider)(nil)

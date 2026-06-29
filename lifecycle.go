@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"reflect"
 	"strings"
@@ -44,74 +45,74 @@ func combineContainerHooks(defaults, user ContainerLifecycleHooks) ContainerLife
 }
 
 // defaultLoggingHooks returns lifecycle hooks that log progress to the console.
-func defaultLoggingHooks(logger log.Logger) ContainerLifecycleHooks {
+func defaultLoggingHooks(logger *slog.Logger) ContainerLifecycleHooks {
 	if logger == nil {
 		logger = log.Default()
 	}
 	return ContainerLifecycleHooks{
 		PreBuilds: []ContainerRequestHook{
 			func(ctx context.Context, req *ContainerRequest) error {
-				logger.Printf("🐳 Building image from Containerfile...")
+				log.Printf("🐳 Building image from Containerfile...")
 				return nil
 			},
 		},
 		PostBuilds: []ContainerRequestHook{
 			func(ctx context.Context, req *ContainerRequest) error {
-				logger.Printf("🐳 Image built successfully.")
+				log.Printf("🐳 Image built successfully.")
 				return nil
 			},
 		},
 		PreCreates: []ContainerRequestHook{
 			func(ctx context.Context, req *ContainerRequest) error {
-				logger.Printf("🐳 Creating container...")
+				log.Printf("🐳 Creating container...")
 				return nil
 			},
 		},
 		PostCreates: []ContainerRequestHook{
 			func(ctx context.Context, req *ContainerRequest) error {
-				logger.Printf("🐳 Container created.")
+				log.Printf("🐳 Container created.")
 				return nil
 			},
 		},
 		PreStarts: []ContainerHook{
 			func(ctx context.Context, c Container) error {
-				logger.Printf("🐳 Starting container %s...", c.GetContainerID())
+				log.Printf("🐳 Starting container %s...", c.GetContainerID())
 				return nil
 			},
 		},
 		PostStarts: []ContainerHook{
 			func(ctx context.Context, c Container) error {
-				logger.Printf("🐳 Container %s started.", c.GetContainerID())
+				log.Printf("🐳 Container %s started.", c.GetContainerID())
 				return nil
 			},
 		},
 		PostReadies: []ContainerHook{
 			func(ctx context.Context, c Container) error {
-				logger.Printf("🐳 Container %s is ready.", c.GetContainerID())
+				log.Printf("🐳 Container %s is ready.", c.GetContainerID())
 				return nil
 			},
 		},
 		PreStops: []ContainerHook{
 			func(ctx context.Context, c Container) error {
-				logger.Printf("🐳 Stopping container %s...", c.GetContainerID())
+				log.Printf("🐳 Stopping container %s...", c.GetContainerID())
 				return nil
 			},
 		},
 		PostStops: []ContainerHook{
 			func(ctx context.Context, c Container) error {
-				logger.Printf("🐳 Container %s stopped.", c.GetContainerID())
+				log.Printf("🐳 Container %s stopped.", c.GetContainerID())
 				return nil
 			},
 		},
 		PreTerminates: []ContainerHook{
 			func(ctx context.Context, c Container) error {
-				logger.Printf("🐳 Terminating container %s...", c.GetContainerID())
+				log.Printf("🐳 Terminating container %s...", c.GetContainerID())
 				return nil
 			},
 		},
 		PostTerminates: []ContainerHook{
 			func(ctx context.Context, c Container) error {
-				logger.Printf("🐳 Container %s terminated.", c.GetContainerID())
+				log.Printf("🐳 Container %s terminated.", c.GetContainerID())
 				return nil
 			},
 		},

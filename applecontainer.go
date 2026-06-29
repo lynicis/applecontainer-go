@@ -6,6 +6,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"os"
 	"sync"
 	"testing"
@@ -41,7 +42,7 @@ func versionCheckOnce(ctx context.Context) error {
 }
 
 // defaultLogger resolves the logger for a container request.
-func defaultLogger(_ *ContainerRequest) log.Logger {
+func defaultLogger(_ *ContainerRequest) *slog.Logger {
 	return log.Default()
 }
 
