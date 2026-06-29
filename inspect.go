@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	json "github.com/goccy/go-json"
+	"encoding/json"
 )
 
 // Inspect is the parsed result of `container inspect <id>` and
