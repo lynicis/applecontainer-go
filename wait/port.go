@@ -41,16 +41,6 @@ func ForListeningPort(port string) *PortStrategy {
 	}
 }
 
-// ForExposedPort is an alias to ForListeningPort.
-func ForExposedPort(port string) *PortStrategy {
-	return ForListeningPort(port)
-}
-
-// ForMappedPort is an alias to ForListeningPort.
-func ForMappedPort(port string) *PortStrategy {
-	return ForListeningPort(port)
-}
-
 // WaitUntilReady dials the container port repeatedly until success or context timeout.
 func (s *PortStrategy) WaitUntilReady(ctx context.Context, target StrategyTarget) error {
 	pNum, proto := parsePort(s.Port)
