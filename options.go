@@ -386,13 +386,6 @@ func WithInit(init bool) ContainerCustomizer {
 	})
 }
 
-// WithEnvFile stubs loading variables from an env file.
-func WithEnvFile(filePath string) ContainerCustomizer {
-	return CustomizeRequestOption(func(req *ContainerRequest) error {
-		return nil
-	})
-}
-
 // WithNetworks appends container networks.
 func WithNetworks(networks ...string) ContainerCustomizer {
 	return CustomizeRequestOption(func(req *ContainerRequest) error {
@@ -577,11 +570,6 @@ func WithLifecycleHooks(hooks ContainerLifecycleHooks) ContainerCustomizer {
 	})
 }
 
-// WithAdditionalLifecycleHooks is an alias to WithLifecycleHooks.
-func WithAdditionalLifecycleHooks(hooks ContainerLifecycleHooks) ContainerCustomizer {
-	return WithLifecycleHooks(hooks)
-}
-
 // WithLogConsumers registers log consumers.
 func WithLogConsumers(consumers ...LogConsumer) ContainerCustomizer {
 	return CustomizeRequestOption(func(req *ContainerRequest) error {
@@ -589,13 +577,6 @@ func WithLogConsumers(consumers ...LogConsumer) ContainerCustomizer {
 			req.LogConsumerCfg = &LogConsumerCfg{}
 		}
 		req.LogConsumerCfg.Consumers = append(req.LogConsumerCfg.Consumers, consumers...)
-		return nil
-	})
-}
-
-// WithLogger stubs logger configuration.
-func WithLogger(logger any) ContainerCustomizer {
-	return CustomizeRequestOption(func(req *ContainerRequest) error {
 		return nil
 	})
 }
