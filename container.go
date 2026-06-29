@@ -25,10 +25,9 @@ type Container interface {
 	Inspect(context.Context) (*Inspect, error)
 	State(context.Context) (*State, error)
 	IsRunning() bool
-	SessionID() string
 	Start(context.Context) error
 	Stop(context.Context, *time.Duration) error
-	Terminate(ctx context.Context, opts ...TerminateOption) error
+	Terminate(ctx context.Context) error
 	Logs(context.Context) (io.ReadCloser, error)
 	Exec(ctx context.Context, cmd []string, opts ...ProcessOption) (int, []byte, error)
 	CopyToContainer(ctx context.Context, content []byte, containerPath string, mode int64) error
@@ -207,12 +206,6 @@ type cliContainer struct {
 
 var _ Container = (*cliContainer)(nil)
 
-// TerminateOption is a functional option for container termination.
-type TerminateOption func(*terminateOptions)
-
-type terminateOptions struct {
-}
-
 // ContainerRequestHook defines a hook triggered with the container request.
 type ContainerRequestHook func(ctx context.Context, req *ContainerRequest) error
 
@@ -348,11 +341,6 @@ func (c *cliContainer) IsRunning() bool {
 	return c.isRunning.Load()
 }
 
-// SessionID returns the session ID of the container.
-func (c *cliContainer) SessionID() string {
-	return ""
-}
-
 // Start starts the container.
 func (c *cliContainer) Start(ctx context.Context) error {
 	err := c.provider.StartContainer(ctx, c)
@@ -374,7 +362,7 @@ func (c *cliContainer) Stop(ctx context.Context, timeout *time.Duration) error {
 }
 
 // Terminate stops and deletes the container. Terminate is idempotent.
-func (c *cliContainer) Terminate(ctx context.Context, opts ...TerminateOption) error {
+func (c *cliContainer) Terminate(ctx context.Context) error {
 	c.isRunning.Store(false)
 
 	if stopErr := c.provider.StopContainer(ctx, c.id, nil); stopErr != nil && !isNotFoundError(stopErr) {

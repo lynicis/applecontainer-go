@@ -25,11 +25,6 @@ type processOptions struct {
 	Env        []string
 }
 
-// PullOption is a functional option for image pulling.
-type PullOption func(*pullOptions)
-
-type pullOptions struct{}
-
 // ImageInspect represents metadata of an image.
 type ImageInspect struct {
 	ID string
@@ -47,10 +42,9 @@ type ContainerProvider interface {
 	ExecContainer(ctx context.Context, id string, cmd []string, opts ...ProcessOption) (int, []byte, error)
 	CopyToContainer(ctx context.Context, id, containerPath string, content []byte, mode int64) error
 	CopyFileFromContainer(ctx context.Context, id, path string) (io.ReadCloser, error)
-	ImagePull(ctx context.Context, ref string, opts ...PullOption) error
+	ImagePull(ctx context.Context, ref string) error
 	ImageInspect(ctx context.Context, ref string) (*ImageInspect, error)
 	Health(ctx context.Context) error
-	Close() error
 }
 
 type cliProvider struct {
@@ -346,14 +340,9 @@ func (p *cliProvider) CopyFileFromContainer(ctx context.Context, id, path string
 }
 
 // ImagePull pulls an image from a registry.
-func (p *cliProvider) ImagePull(ctx context.Context, ref string, opts ...PullOption) error {
+func (p *cliProvider) ImagePull(ctx context.Context, ref string) error {
 	if ref == "" {
 		return fmt.Errorf("applecontainer: cannot pull empty image reference")
-	}
-
-	var pOpts pullOptions
-	for _, opt := range opts {
-		opt(&pOpts)
 	}
 
 	args := []string{"image", "pull", "--progress", "plain", ref}
@@ -402,10 +391,5 @@ func (p *cliProvider) Health(ctx context.Context) error {
 	if _, _, _, err := p.runner.Run(ctx, []string{"system", "status"}, nil); err != nil {
 		return fmt.Errorf("applecontainer: health check failed: system status check: %w", err)
 	}
-	return nil
-}
-
-// Close closes any resources associated with the provider.
-func (p *cliProvider) Close() error {
 	return nil
 }

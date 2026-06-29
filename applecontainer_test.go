@@ -37,7 +37,7 @@ type cleanupTrackingContainer struct {
 	terminated bool
 }
 
-func (c *cleanupTrackingContainer) Terminate(ctx context.Context, opts ...TerminateOption) error {
+func (c *cleanupTrackingContainer) Terminate(ctx context.Context) error {
 	c.terminated = true
 	return nil
 }

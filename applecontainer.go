@@ -82,13 +82,13 @@ func Run(ctx context.Context, img string, opts ...ContainerCustomizer) (*cliCont
 }
 
 // CleanupContainer registers container termination during test cleanup.
-func CleanupContainer(t testing.TB, c Container, opts ...TerminateOption) {
+func CleanupContainer(t testing.TB, c Container) {
 	t.Helper()
 	if c == nil {
 		return
 	}
 	t.Cleanup(func() {
-		if err := c.Terminate(context.Background(), opts...); err != nil {
+		if err := c.Terminate(context.Background()); err != nil {
 			t.Logf("applecontainer: failed to terminate container during cleanup: %v", err)
 		}
 	})
