@@ -1,7 +1,6 @@
 # 🍎 applecontainer-go
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/lynicis/applecontainer-go.svg)](https://pkg.go.dev/github.com/lynicis/applecontainer-go)
-[![Go Report Card](https://goreportcard.com/badge/github.com/lynicis/applecontainer-go)](https://goreportcard.com/report/github.com/lynicis/applecontainer-go)
 [![codecov](https://codecov.io/gh/lynicis/applecontainer-go/branch/main/graph/badge.svg)](https://codecov.io/gh/lynicis/applecontainer-go)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
@@ -230,86 +229,33 @@ c, err := applecontainer.Run(ctx, "postgres:alpine",
 
 ## Benchmarks
 
-Performance comparison: **applecontainer-go** (Apple native `container` CLI) vs **testcontainers-go** (Docker Desktop).
-
-**Hardware**: Apple M5 · macOS 26 · container CLI v1.0.0 · Docker Desktop v29.4.0
-**Method**: `benchtime=1x`, single iteration per benchmark.
-
-### Cold Start (3 images)
-
-| Container | applecontainer-go | testcontainers-go | Δ |
-| :--- | ---: | ---: | ---: |
-| nginx:alpine | 1.84s | — | — |
-| redis:alpine | 1.84s | — | — |
-| postgres:alpine | 7.38s | — | — |
-
-### Operation Latency
-
-| Operation | applecontainer-go | testcontainers-go | Δ |
-| :--- | ---: | ---: | ---: |
-| Stop | 247ms | 260ms | **1.1x faster** |
-| Start | 88ms | 248ms | **2.8x faster** |
-| Terminate | 266ms | 283ms | **1.1x faster** |
-| Inspect | 307ms | 295ms | ≈ same |
-| Exec (echo) | 347ms | 425ms | **1.2x faster** |
-| Copy To (1 KB) | 301ms | 297ms | ≈ same |
-| Copy To (1 MB) | 290ms | 298ms | ≈ same |
-| Copy From (1 KB) | 293ms | 280ms | ≈ same |
-| Copy From (1 MB) | 307ms | 279ms | 1.1x slower |
-| Logs (10k lines) | 5.55s | 10.24s | **1.8x faster** |
-
-### Wait Strategies (Overhead)
-
-Apple's native `container` CLI requires spawning new processes for `exec` and `inspect` loops, resulting in higher polling latency compared to Testcontainers' direct daemon socket connection.
-
-| Strategy | applecontainer-go | testcontainers-go | Δ |
-| :--- | ---: | ---: | ---: |
-| HTTP | 747ms | 355ms | 2.1x slower |
-| SQL | 1.74s | 518ms | 3.3x slower |
-| Exec | 738ms | 321ms | 2.2x slower |
-| Health | 711ms | 645ms | 1.1x slower |
-| Composite (All) | 773ms | 433ms | 1.7x slower |
-| Log (5k lines) | 756ms | 651ms | 1.1x slower |
-
-### Internal Processing
-
-| Operation | Latency | Memory |
-| :--- | ---: | ---: |
-| Parse Inspect JSON | 43µs | 81 allocs/op |
-| Parse Image Inspect | 16µs | 9 allocs/op |
-
-### Network Performance
-
-| Test | applecontainer-go | testcontainers-go | Δ |
-| :--- | ---: | ---: | ---: |
-| TCP Latency (redis PING) | 414ms | 480ms | **1.2x faster** |
-| HTTP Throughput (nginx) | N/A | 2.07s | — |
-
-### Parallel Startup (nginx:alpine)
-
-| Containers | applecontainer-go | testcontainers-go | Δ |
-| ---: | ---: | ---: | ---: |
-| 2 | 1.60s | 592ms | 2.7x slower |
-| 4 | 6.22s | 966ms | 6.4x slower |
-| 8 | 6.42s | 1.80s | 3.6x slower |
-
-### Image Operations
-
-| Test | applecontainer-go | testcontainers-go | Δ |
-| :--- | ---: | ---: | ---: |
-| Image Pull (postgres:alpine) | 9.97s | 2.56s | 3.9x slower |
-| Image Build | N/A | 329ms | — |
-
-**Key takeaways**:
-- **Start/Stop/Terminate/Exec** are significantly faster with the native Apple runtime — up to 3x for Start.
-- **Parallel scalability** is limited — the Apple CLI processes containers sequentially, while Docker runs them concurrently.
-- **Image operations** (pull, build) are slower due to the Apple CLI's image management overhead.
-- **HTTP throughput** from host is not supported in Apple's direct-IP networking model.
-
-Run benchmarks locally:
+Results from live benchmark code in `benchmarks/`. Run with:
 ```bash
-make test-benchmark
+cd benchmarks && go test -bench=. -benchmem -benchtime=5x ./...
 ```
+
+**Env**: Go 1.26.4 · darwin/arm64 · Apple M5 · Postgres 15 via testcontainers-go.
+
+### Driver ops (pgx vs pq vs gorm)
+
+| Op | pgx ns/op | pgx B/op | pgx allocs | pq ns/op | pq B/op | pq allocs | gorm ns/op | gorm B/op | gorm allocs |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Insert | 127k | 115 | 3 | 247k | 560 | 16 | 375k | 6,092 | 74 |
+| Bulk (100) | 250k | 81k | 311 | 365k | 85k | 418 | 578k | 42k | 695 |
+| Select PK | 223k | 384 | 8 | 240k | 889 | 26 | 143k | 4,990 | 61 |
+| Select filter | 132k | 320 | 3 | 229k | 864 | 22 | 145k | 12.5k | 352 |
+| Update | 169k | 121 | 3 | 237k | 592 | 17 | 375k | 5,534 | 61 |
+| Delete | 177k | 9 | 1 | 135k | 105 | 5 | 137k | 1,016 | 12 |
+
+pgx wins on writes + memory. gorm fastest on selects (query cache), 10-70x allocations.
+
+### testcontainers module startup
+
+| Module | ready (ms) | teardown (ms) | B/op | allocs/op |
+| :--- | ---: | ---: | ---: | ---: |
+| postgres:15-alpine | 635 | 160 | 1.4M | 7,821 |
+| redis:alpine | 236 | 203 | 693k | 4,146 |
+| nginx:alpine | 307 | 179 | 500k | 2,968 |
 
 ---
 

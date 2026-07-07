@@ -2,6 +2,7 @@ package benchmarks
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/lynicis/applecontainer-go/wait"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/moby/moby/api/types/network"
 	tccontainer "github.com/testcontainers/testcontainers-go"
 	tcwait "github.com/testcontainers/testcontainers-go/wait"
 )
@@ -34,8 +36,8 @@ func BenchmarkImagePull(b *testing.B) {
 					Env: map[string]string{
 						"POSTGRES_PASSWORD": "test",
 					},
-					WaitingFor: tcwait.ForSQL("5432", "pgx", func(host, port string) string {
-						return "postgres://postgres:test@" + host + ":" + port + "/postgres?sslmode=disable"
+					WaitingFor: tcwait.ForSQL("5432", "pgx", func(host string, port network.Port) string {
+						return "postgres://postgres:test@" + host + ":" + fmt.Sprint(port) + "/postgres?sslmode=disable"
 					}).WithStartupTimeout(300 * time.Second),
 				},
 			}
