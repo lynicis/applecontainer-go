@@ -354,3 +354,246 @@ func BenchmarkCopyFile1MB(b *testing.B) {
 		}
 	})
 }
+
+func BenchmarkCopyFileFromContainer1KB(b *testing.B) {
+	RunWithBoth(b, func(b *testing.B, rt Runtime) {
+		ctx := context.Background()
+		img := "nginx:alpine"
+
+		data := make([]byte, 1024)
+		for i := range data {
+			data[i] = byte(i % 256)
+		}
+
+		switch rt {
+		case AppleContainer:
+			b.StopTimer()
+			c, err := applecontainer.Run(ctx, img,
+				applecontainer.WithExposedPorts("80"),
+				applecontainer.WithWaitStrategyAndDeadline(wait.ForLog("ready for start up"), 120*time.Second),
+			)
+			if err != nil {
+				b.Fatal(err)
+			}
+			defer c.Terminate(ctx)
+
+			if err := c.CopyToContainer(ctx, data, "/tmp/payload", 0o644); err != nil {
+				b.Fatal(err)
+			}
+
+			b.StartTimer()
+
+			for i := 0; i < b.N; i++ {
+				rc, err := c.CopyFileFromContainer(ctx, "/tmp/payload")
+				if err != nil {
+					b.Fatal(err)
+				}
+				_, _ = io.Copy(io.Discard, rc)
+				_ = rc.Close()
+			}
+		case TestcontainersGo:
+			b.StopTimer()
+			req := tccontainer.GenericContainerRequest{
+				ContainerRequest: tccontainer.ContainerRequest{
+					Image:        img,
+					ExposedPorts: []string{"80"},
+					WaitingFor:   tcwait.ForHTTP("/").WithPort("80"),
+				},
+				Started: true,
+			}
+			c, err := tccontainer.GenericContainer(ctx, req)
+			if err != nil {
+				b.Fatal(err)
+			}
+			defer c.Terminate(ctx)
+
+			if err := c.CopyToContainer(ctx, data, "/tmp/payload", 0o644); err != nil {
+				b.Fatal(err)
+			}
+
+			b.StartTimer()
+
+			for i := 0; i < b.N; i++ {
+				rc, err := c.CopyFileFromContainer(ctx, "/tmp/payload")
+				if err != nil {
+					b.Fatal(err)
+				}
+				_, _ = io.Copy(io.Discard, rc)
+				_ = rc.Close()
+			}
+		}
+	})
+}
+
+func BenchmarkCopyFileFromContainer1MB(b *testing.B) {
+	RunWithBoth(b, func(b *testing.B, rt Runtime) {
+		ctx := context.Background()
+		img := "nginx:alpine"
+
+		data := make([]byte, 1024*1024)
+		for i := range data {
+			data[i] = byte(i % 256)
+		}
+
+		switch rt {
+		case AppleContainer:
+			b.StopTimer()
+			c, err := applecontainer.Run(ctx, img,
+				applecontainer.WithExposedPorts("80"),
+				applecontainer.WithWaitStrategyAndDeadline(wait.ForLog("ready for start up"), 120*time.Second),
+			)
+			if err != nil {
+				b.Fatal(err)
+			}
+			defer c.Terminate(ctx)
+
+			if err := c.CopyToContainer(ctx, data, "/tmp/payload", 0o644); err != nil {
+				b.Fatal(err)
+			}
+
+			b.StartTimer()
+
+			for i := 0; i < b.N; i++ {
+				rc, err := c.CopyFileFromContainer(ctx, "/tmp/payload")
+				if err != nil {
+					b.Fatal(err)
+				}
+				_, _ = io.Copy(io.Discard, rc)
+				_ = rc.Close()
+			}
+		case TestcontainersGo:
+			b.StopTimer()
+			req := tccontainer.GenericContainerRequest{
+				ContainerRequest: tccontainer.ContainerRequest{
+					Image:        img,
+					ExposedPorts: []string{"80"},
+					WaitingFor:   tcwait.ForHTTP("/").WithPort("80"),
+				},
+				Started: true,
+			}
+			c, err := tccontainer.GenericContainer(ctx, req)
+			if err != nil {
+				b.Fatal(err)
+			}
+			defer c.Terminate(ctx)
+
+			if err := c.CopyToContainer(ctx, data, "/tmp/payload", 0o644); err != nil {
+				b.Fatal(err)
+			}
+
+			b.StartTimer()
+
+			for i := 0; i < b.N; i++ {
+				rc, err := c.CopyFileFromContainer(ctx, "/tmp/payload")
+				if err != nil {
+					b.Fatal(err)
+				}
+				_, _ = io.Copy(io.Discard, rc)
+				_ = rc.Close()
+			}
+		}
+	})
+}
+
+func BenchmarkLogs(b *testing.B) {
+	RunWithBoth(b, func(b *testing.B, rt Runtime) {
+		ctx := context.Background()
+		// Alpine printing ~10k lines of logs quickly
+		img := "alpine:latest"
+		cmd := []string{"sh", "-c", "for i in $(seq 1 10000); do echo 'log line output testing performance' $i; done; sleep 3600"}
+
+		switch rt {
+		case AppleContainer:
+			b.StopTimer()
+			c, err := applecontainer.Run(ctx, img,
+				applecontainer.WithCmd(cmd...),
+				applecontainer.WithWaitStrategyAndDeadline(wait.ForLog("log line output testing performance 10000"), 120*time.Second),
+			)
+			if err != nil {
+				b.Fatal(err)
+			}
+			defer c.Terminate(ctx)
+			b.StartTimer()
+
+			for i := 0; i < b.N; i++ {
+				rc, err := c.Logs(ctx)
+				if err != nil {
+					b.Fatal(err)
+				}
+				_, _ = io.Copy(io.Discard, rc)
+				_ = rc.Close()
+			}
+		case TestcontainersGo:
+			b.StopTimer()
+			req := tccontainer.GenericContainerRequest{
+				ContainerRequest: tccontainer.ContainerRequest{
+					Image:      img,
+					Cmd:        cmd,
+					WaitingFor: tcwait.ForLog("log line output testing performance 10000"),
+				},
+				Started: true,
+			}
+			c, err := tccontainer.GenericContainer(ctx, req)
+			if err != nil {
+				b.Fatal(err)
+			}
+			defer c.Terminate(ctx)
+			b.StartTimer()
+
+			for i := 0; i < b.N; i++ {
+				rc, err := c.Logs(ctx)
+				if err != nil {
+					b.Fatal(err)
+				}
+				_, _ = io.Copy(io.Discard, rc)
+				_ = rc.Close()
+			}
+		}
+	})
+}
+
+func BenchmarkWaitStrategyLog(b *testing.B) {
+	RunWithBoth(b, func(b *testing.B, rt Runtime) {
+		ctx := context.Background()
+		img := "alpine:latest"
+		// Print 5000 lines then ready
+		cmd := []string{"sh", "-c", "for i in $(seq 1 5000); do echo 'spam line' $i; done; echo 'READY'; sleep 3600"}
+
+		switch rt {
+		case AppleContainer:
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				// Note: we measure the ENTIRE Run call which includes WaitStrategy execution
+				b.StartTimer()
+				c, err := applecontainer.Run(ctx, img,
+					applecontainer.WithCmd(cmd...),
+					applecontainer.WithWaitStrategyAndDeadline(wait.ForLog("READY"), 120*time.Second),
+				)
+				if err != nil {
+					b.Fatal(err)
+				}
+				b.StopTimer()
+				c.Terminate(ctx)
+			}
+		case TestcontainersGo:
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				req := tccontainer.GenericContainerRequest{
+					ContainerRequest: tccontainer.ContainerRequest{
+						Image:      img,
+						Cmd:        cmd,
+						WaitingFor: tcwait.ForLog("READY"),
+					},
+					Started: true,
+				}
+				b.StartTimer()
+				c, err := tccontainer.GenericContainer(ctx, req)
+				if err != nil {
+					b.Fatal(err)
+				}
+				b.StopTimer()
+				c.Terminate(ctx)
+			}
+		}
+	})
+}

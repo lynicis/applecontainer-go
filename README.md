@@ -239,36 +239,59 @@ Performance comparison: **applecontainer-go** (Apple native `container` CLI) vs 
 
 | Container | applecontainer-go | testcontainers-go | Δ |
 | :--- | ---: | ---: | ---: |
-| nginx:alpine | 1.75s | — | — |
-| redis:alpine | 1.76s | — | — |
-| postgres:alpine | 7.27s | — | — |
+| nginx:alpine | 1.84s | — | — |
+| redis:alpine | 1.84s | — | — |
+| postgres:alpine | 7.38s | — | — |
 
 ### Operation Latency
 
 | Operation | applecontainer-go | testcontainers-go | Δ |
 | :--- | ---: | ---: | ---: |
-| Stop | 246ms | 289ms | **1.2x faster** |
-| Start | 86ms | 266ms | **3.1x faster** |
-| Terminate | 253ms | 291ms | **1.1x faster** |
-| Inspect | 259ms | 296ms | **1.1x faster** |
-| Exec (echo) | 341ms | 422ms | **1.2x faster** |
-| Copy 1 KB | 330ms | 273ms | 1.2x slower |
-| Copy 1 MB | 260ms | 266ms | ≈ same |
+| Stop | 247ms | 260ms | **1.1x faster** |
+| Start | 88ms | 248ms | **2.8x faster** |
+| Terminate | 266ms | 283ms | **1.1x faster** |
+| Inspect | 307ms | 295ms | ≈ same |
+| Exec (echo) | 347ms | 425ms | **1.2x faster** |
+| Copy To (1 KB) | 301ms | 297ms | ≈ same |
+| Copy To (1 MB) | 290ms | 298ms | ≈ same |
+| Copy From (1 KB) | 293ms | 280ms | ≈ same |
+| Copy From (1 MB) | 307ms | 279ms | 1.1x slower |
+| Logs (10k lines) | 5.55s | 10.24s | **1.8x faster** |
+
+### Wait Strategies (Overhead)
+
+Apple's native `container` CLI requires spawning new processes for `exec` and `inspect` loops, resulting in higher polling latency compared to Testcontainers' direct daemon socket connection.
+
+| Strategy | applecontainer-go | testcontainers-go | Δ |
+| :--- | ---: | ---: | ---: |
+| HTTP | 747ms | 355ms | 2.1x slower |
+| SQL | 1.74s | 518ms | 3.3x slower |
+| Exec | 738ms | 321ms | 2.2x slower |
+| Health | 711ms | 645ms | 1.1x slower |
+| Composite (All) | 773ms | 433ms | 1.7x slower |
+| Log (5k lines) | 756ms | 651ms | 1.1x slower |
+
+### Internal Processing
+
+| Operation | Latency | Memory |
+| :--- | ---: | ---: |
+| Parse Inspect JSON | 43µs | 81 allocs/op |
+| Parse Image Inspect | 16µs | 9 allocs/op |
 
 ### Network Performance
 
 | Test | applecontainer-go | testcontainers-go | Δ |
 | :--- | ---: | ---: | ---: |
-| TCP Latency (redis PING) | 280ms | 452ms | **1.6x faster** |
-| HTTP Throughput (nginx) | N/A | 2.09s | — |
+| TCP Latency (redis PING) | 414ms | 480ms | **1.2x faster** |
+| HTTP Throughput (nginx) | N/A | 2.07s | — |
 
 ### Parallel Startup (nginx:alpine)
 
 | Containers | applecontainer-go | testcontainers-go | Δ |
 | ---: | ---: | ---: | ---: |
-| 2 | 1.50s | 554ms | 2.7x slower |
-| 4 | 3.06s | 1.02s | 3.0x slower |
-| 8 | 6.13s | 1.80s | 3.4x slower |
+| 2 | 1.60s | 592ms | 2.7x slower |
+| 4 | 6.22s | 966ms | 6.4x slower |
+| 8 | 6.42s | 1.80s | 3.6x slower |
 
 ### Image Operations
 
@@ -285,8 +308,7 @@ Performance comparison: **applecontainer-go** (Apple native `container` CLI) vs 
 
 Run benchmarks locally:
 ```bash
-cd benchmarks
-APPLECONTAINER_BENCHMARK=1 go test -bench=. -benchtime=1x -tags benchmark -timeout=600s ./...
+make test-benchmark
 ```
 
 ---
@@ -296,13 +318,13 @@ APPLECONTAINER_BENCHMARK=1 go test -bench=. -benchtime=1x -tags benchmark -timeo
 ### Unit Tests
 Unit tests use mocking and system CLI fakes and do not require the actual Apple container runtime environment.
 ```bash
-go test ./...
+make test
 ```
 
 ### Integration Tests
 Integration tests run real container scenarios and require macOS with a running `container` CLI daemon.
 ```bash
-APPLECONTAINER_INTEGRATION=1 go test -tags integration -v ./examples/...
+make test-examples
 ```
 
 ---
