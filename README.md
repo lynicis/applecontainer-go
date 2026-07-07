@@ -22,7 +22,6 @@ Unlike Docker-based libraries, `applecontainer-go` integrates directly with the 
   - [2. Host-Port Mapping Mode (Opt-in)](#2-host-port-mapping-mode-opt-in)
 - [Wait Strategies](#wait-strategies)
 - [Customizer Options](#customizer-options)
-- [Lifecycle Hooks](#lifecycle-hooks)
 - [Networks and Volumes](#networks-and-volumes)
   - [Networks](#networks)
   - [Volumes](#volumes)
@@ -40,7 +39,6 @@ Unlike Docker-based libraries, `applecontainer-go` integrates directly with the 
 - 🌐 **Double Networking Modes**: Choose between Bridged Direct IP and Host-Port mapping models.
 - ⏱️ **Robust Wait Strategies**: Built-in support for HTTP, listening ports, logs, SQL databases, executions, and file existence.
 - 🏗️ **Build from Context**: Support for building images on the fly via `Containerfile` / `Dockerfile`.
-- 🪝 **Lifecycle Hooks**: Attach custom execution callbacks to pre/post container build, creation, start, and termination phases.
 
 ---
 
@@ -191,35 +189,7 @@ Customize the container configuration using functional options:
 | `WithMemory(bytes)` | `int64` | Memory allocation limits. |
 | `WithWaitStrategy(strat)` | `wait.Strategy` | Configures the default wait strategy with a default 60s timeout. |
 | `WithContainerfile(cf)` | `FromContainerfile` | Build image from a context directory using Containerfile. |
-| `WithLifecycleHooks(hooks)`| `ContainerLifecycleHooks`| Hooks to inject custom callbacks into lifecycle states. |
-| `WithLogConsumers(c...)` | `...LogConsumer` | Register consumers to receive stream container stdout/stderr. |
-
----
-
-## Lifecycle Hooks
-
-You can hook into different phases of the container's lifecycle:
-
-```go
-hooks := applecontainer.ContainerLifecycleHooks{
-	PreStarts: []applecontainer.ContainerHook{
-		func(ctx context.Context, c applecontainer.Container) error {
-			fmt.Println("Container is about to start!")
-			return nil
-		},
-	},
-	PostReadies: []applecontainer.ContainerHook{
-		func(ctx context.Context, c applecontainer.Container) error {
-			fmt.Println("Container is ready and wait strategies passed!")
-			return nil
-		},
-	},
-}
-
-c, err := applecontainer.Run(ctx, "nginx:alpine",
-	applecontainer.WithLifecycleHooks(hooks),
-)
-```
+| `WithLogWriters(w...)` | `...io.Writer` | Register `io.Writer`s to receive streaming container stdout/stderr logs. |
 
 ---
 
@@ -269,43 +239,43 @@ Performance comparison: **applecontainer-go** (Apple native `container` CLI) vs 
 
 | Container | applecontainer-go | testcontainers-go | Δ |
 | :--- | ---: | ---: | ---: |
-| nginx:alpine | 1.90s | — | — |
-| redis:alpine | 2.15s | — | — |
-| postgres:alpine | 7.46s | — | — |
+| nginx:alpine | 1.75s | — | — |
+| redis:alpine | 1.76s | — | — |
+| postgres:alpine | 7.27s | — | — |
 
 ### Operation Latency
 
 | Operation | applecontainer-go | testcontainers-go | Δ |
 | :--- | ---: | ---: | ---: |
-| Stop | 253ms | 294ms | **1.2x faster** |
-| Start | 84ms | 260ms | **3.1x faster** |
-| Terminate | 254ms | 336ms | **1.3x faster** |
-| Inspect | 304ms | 313ms | ≈ same |
-| Exec (echo) | 341ms | 499ms | **1.5x faster** |
-| Copy 1 KB | 296ms | 301ms | ≈ same |
-| Copy 1 MB | 293ms | 302ms | ≈ same |
+| Stop | 246ms | 289ms | **1.2x faster** |
+| Start | 86ms | 266ms | **3.1x faster** |
+| Terminate | 253ms | 291ms | **1.1x faster** |
+| Inspect | 259ms | 296ms | **1.1x faster** |
+| Exec (echo) | 341ms | 422ms | **1.2x faster** |
+| Copy 1 KB | 330ms | 273ms | 1.2x slower |
+| Copy 1 MB | 260ms | 266ms | ≈ same |
 
 ### Network Performance
 
 | Test | applecontainer-go | testcontainers-go | Δ |
 | :--- | ---: | ---: | ---: |
-| TCP Latency (redis PING) | 296ms | 688ms | **2.3x faster** |
-| HTTP Throughput (nginx) | N/A | 2.16s | — |
+| TCP Latency (redis PING) | 280ms | 452ms | **1.6x faster** |
+| HTTP Throughput (nginx) | N/A | 2.09s | — |
 
 ### Parallel Startup (nginx:alpine)
 
 | Containers | applecontainer-go | testcontainers-go | Δ |
 | ---: | ---: | ---: | ---: |
-| 2 | 1.52s | 658ms | 2.3x slower |
-| 4 | 3.39s | 1.13s | 3.0x slower |
-| 8 | 6.54s | 2.05s | 3.2x slower |
+| 2 | 1.50s | 554ms | 2.7x slower |
+| 4 | 3.06s | 1.02s | 3.0x slower |
+| 8 | 6.13s | 1.80s | 3.4x slower |
 
 ### Image Operations
 
 | Test | applecontainer-go | testcontainers-go | Δ |
 | :--- | ---: | ---: | ---: |
-| Image Pull (postgres:alpine) | 6.44s | 2.05s | 3.1x slower |
-| Image Build | N/A | 16ms | — |
+| Image Pull (postgres:alpine) | 9.97s | 2.56s | 3.9x slower |
+| Image Build | N/A | 329ms | — |
 
 **Key takeaways**:
 - **Start/Stop/Terminate/Exec** are significantly faster with the native Apple runtime — up to 3x for Start.

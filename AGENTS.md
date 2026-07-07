@@ -2,6 +2,8 @@
 
 Welcome to the **applecontainer-go** codebase. This guide outlines key workflows, testing protocols, and code intelligence tools for agentic development.
 
+**Architecture Note:** This project was recently refactored to remove complex abstractions (e.g. multi-phase lifecycle hooks, pub/sub log fanouts). Favor imperative, standard Go patterns (like standard `io.Writer` and sequential execution) when adding new features. Keep the core lean.
+
 ---
 
 ## 🛠️ Development & Validation Commands
@@ -33,7 +35,7 @@ Use these commands to build, lint, and test your changes:
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **applecontainers-go** (1020 symbols, 2764 relationships, 55 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **applecontainers-go** (826 symbols, 2312 relationships, 42 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 
@@ -42,8 +44,9 @@ This project is indexed by GitNexus as **applecontainers-go** (1020 symbols, 276
 - **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
 - **MUST run `detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows. For regression review, compare against the default branch: `detect_changes({scope: "compare", base_ref: "master"})`.
 - **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
-- When exploring unfamiliar code, use `query({query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
+- When exploring unfamiliar code, use `query({search_query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
 - When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `context({name: "symbolName"})`.
+- For security review, `explain({target: "fileOrSymbol"})` lists taint findings (source→sink flows; needs `analyze --pdg`).
 
 ## Never Do
 
