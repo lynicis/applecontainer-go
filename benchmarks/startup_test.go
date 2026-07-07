@@ -2,6 +2,7 @@ package benchmarks
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -24,8 +25,13 @@ func startupImages() []startupImage {
 }
 
 func BenchmarkStartup(b *testing.B) {
+	if os.Getenv("APPLECONTAINER_BENCHMARK") == "" {
+		b.Fatal("Set APPLECONTAINER_BENCHMARK=1 to run benchmarks")
+	}
+
 	for _, img := range startupImages() {
 		b.Run(img.label, func(b *testing.B) {
+			SkipIfProviderNotHealthy(b)
 			ctx := context.Background()
 			prePull(b, AppleContainer, img.image)
 

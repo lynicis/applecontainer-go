@@ -18,9 +18,9 @@ func TestNetworkIntegration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	nw, err := applecontainer.NewNetwork(ctx,
-		applecontainer.WithNetworkLabels(map[string]string{"type": "integration"}),
-	)
+	nw, err := applecontainer.NewNetwork(ctx, applecontainer.NetworkRequest{
+		Labels: map[string]string{"type": "integration"},
+	})
 	if err != nil {
 		t.Fatalf("failed to create network: %v", err)
 	}

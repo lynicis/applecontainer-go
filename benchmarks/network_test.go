@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -17,9 +18,14 @@ import (
 )
 
 func BenchmarkHTTPThroughput(b *testing.B) {
+	if os.Getenv("APPLECONTAINER_BENCHMARK") == "" {
+		b.Fatal("Set APPLECONTAINER_BENCHMARK=1 to run benchmarks")
+	}
+
 	// Apple container networking doesn't support inbound HTTP from host.
 	// Only benchmark testcontainers-go for HTTP throughput.
 	b.Run("TestcontainersGo", func(b *testing.B) {
+		SkipIfDockerNotHealthy(b)
 		ctx := context.Background()
 		img := "nginx:alpine"
 		prePull(b, TestcontainersGo, img)

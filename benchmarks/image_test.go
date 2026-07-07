@@ -2,6 +2,7 @@ package benchmarks
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -14,7 +15,12 @@ import (
 )
 
 func BenchmarkImagePull(b *testing.B) {
+	if os.Getenv("APPLECONTAINER_BENCHMARK") == "" {
+		b.Fatal("Set APPLECONTAINER_BENCHMARK=1 to run benchmarks")
+	}
+
 	b.Run("testcontainers-go", func(b *testing.B) {
+		SkipIfDockerNotHealthy(b)
 		img := "postgres:alpine"
 		ctx := context.Background()
 		prePull(b, TestcontainersGo, img)
@@ -43,6 +49,7 @@ func BenchmarkImagePull(b *testing.B) {
 	})
 
 	b.Run("applecontainer", func(b *testing.B) {
+		SkipIfProviderNotHealthy(b)
 		img := "postgres:alpine"
 		ctx := context.Background()
 		prePull(b, AppleContainer, img)
@@ -67,7 +74,12 @@ func BenchmarkImagePull(b *testing.B) {
 }
 
 func BenchmarkImageBuild(b *testing.B) {
+	if os.Getenv("APPLECONTAINER_BENCHMARK") == "" {
+		b.Fatal("Set APPLECONTAINER_BENCHMARK=1 to run benchmarks")
+	}
+
 	b.Run("testcontainers-go", func(b *testing.B) {
+		SkipIfDockerNotHealthy(b)
 		ctx := context.Background()
 		for i := 0; i < b.N; i++ {
 			b.StopTimer()
