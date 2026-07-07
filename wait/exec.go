@@ -12,13 +12,7 @@ type ExecStrategy struct {
 	Cmd             []string
 	ExitCodeMatcher func(int) bool
 	ResponseMatcher func(io.Reader) bool
-	startupTimeout  time.Duration
 	PollInterval    time.Duration
-}
-
-// Timeout returns the custom timeout for this strategy.
-func (s *ExecStrategy) Timeout() time.Duration {
-	return s.startupTimeout
 }
 
 // WithExitCodeMatcher sets a custom matcher for the command's exit code.
@@ -30,12 +24,6 @@ func (s *ExecStrategy) WithExitCodeMatcher(matcher func(int) bool) *ExecStrategy
 // WithResponseMatcher sets a custom matcher for the command's output.
 func (s *ExecStrategy) WithResponseMatcher(matcher func(io.Reader) bool) *ExecStrategy {
 	s.ResponseMatcher = matcher
-	return s
-}
-
-// WithStartupTimeout sets the custom startup timeout.
-func (s *ExecStrategy) WithStartupTimeout(d time.Duration) *ExecStrategy {
-	s.startupTimeout = d
 	return s
 }
 

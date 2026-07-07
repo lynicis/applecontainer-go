@@ -96,7 +96,7 @@ func TestRun_AppliesOptionsAndOrchestrates(t *testing.T) {
 
 	// Execute Run with custom options
 	var customOptionApplied bool
-	customOpt := CustomizeRequestOption(func(req *ContainerRequest) error {
+	customOpt := ContainerCustomizer(func(req *ContainerRequest) error {
 		customOptionApplied = true
 		return nil
 	})

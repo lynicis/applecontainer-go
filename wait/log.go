@@ -12,16 +12,10 @@ import (
 
 // LogStrategy waits for a specific log pattern to appear in the container's logs.
 type LogStrategy struct {
-	Pattern        string
-	Occurrence     int
-	IsRegexp       bool
-	startupTimeout time.Duration
-	PollInterval   time.Duration
-}
-
-// Timeout returns the custom timeout for this strategy.
-func (s *LogStrategy) Timeout() time.Duration {
-	return s.startupTimeout
+	Pattern      string
+	Occurrence   int
+	IsRegexp     bool
+	PollInterval time.Duration
 }
 
 // AsRegexp configures the pattern to be treated as a regular expression.
@@ -33,12 +27,6 @@ func (s *LogStrategy) AsRegexp() *LogStrategy {
 // WithOccurrence sets the number of times the pattern must appear.
 func (s *LogStrategy) WithOccurrence(n int) *LogStrategy {
 	s.Occurrence = n
-	return s
-}
-
-// WithStartupTimeout sets the custom startup timeout.
-func (s *LogStrategy) WithStartupTimeout(d time.Duration) *LogStrategy {
-	s.startupTimeout = d
 	return s
 }
 

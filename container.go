@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -74,8 +75,8 @@ type ContainerRequest struct {
 	Name              string
 	Labels            map[string]string
 	WaitingFor        WaitingFor
-	LifecycleHooks    ContainerLifecycleHooks
-	LogConsumerCfg    *LogConsumerCfg
+	LogWriters        []io.Writer
+	Cleanups          []func(context.Context) error
 	HostPortMapping   bool
 	CLIArgsModifier   CLIArgsModifier
 }
@@ -135,22 +136,6 @@ type Ulimit struct {
 // WaitingFor is an alias for wait.Strategy.
 type WaitingFor = wait.Strategy
 
-// Log represents a log message.
-type Log struct {
-	LogType string
-	Content []byte
-}
-
-// LogConsumer defines the interface for consuming container logs.
-type LogConsumer interface {
-	Accept(Log)
-}
-
-// LogConsumerCfg holds log consumer settings.
-type LogConsumerCfg struct {
-	Consumers []LogConsumer
-}
-
 // CLIArgsModifier allows modifying the command line arguments sent to the CLI.
 type CLIArgsModifier func([]string) []string
 
@@ -201,32 +186,10 @@ type cliContainer struct {
 	req       ContainerRequest
 	log       *slog.Logger
 	isRunning atomic.Bool
-	lifecycle []ContainerLifecycleHooks
-	logFanout *logFanout
+	logCancel context.CancelFunc
 }
 
 var _ Container = (*cliContainer)(nil)
-
-// ContainerRequestHook defines a hook triggered with the container request.
-type ContainerRequestHook func(ctx context.Context, req *ContainerRequest) error
-
-// ContainerHook defines a hook triggered with the container.
-type ContainerHook func(ctx context.Context, c Container) error
-
-// ContainerLifecycleHooks defines hooks during container lifecycle phases.
-type ContainerLifecycleHooks struct {
-	PreBuilds      []ContainerRequestHook
-	PostBuilds     []ContainerRequestHook
-	PreCreates     []ContainerRequestHook
-	PostCreates    []ContainerRequestHook
-	PreStarts      []ContainerHook
-	PostStarts     []ContainerHook
-	PostReadies    []ContainerHook
-	PreStops       []ContainerHook
-	PostStops      []ContainerHook
-	PreTerminates  []ContainerHook
-	PostTerminates []ContainerHook
-}
 
 // GetContainerID returns the ID of the container.
 func (c *cliContainer) GetContainerID() string {
@@ -260,7 +223,7 @@ func (c *cliContainer) ContainerIP(ctx context.Context) (string, error) {
 
 // MappedPort returns the host-mapped port for the specified container port.
 func (c *cliContainer) MappedPort(ctx context.Context, port string) (int, error) {
-	pNum, proto := parsePort(port)
+	pNum, proto := wait.ParsePort(port)
 	if pNum <= 0 {
 		return 0, fmt.Errorf("applecontainer: invalid port: %s", port)
 	}
@@ -286,7 +249,7 @@ func (c *cliContainer) Endpoint(ctx context.Context, port string) (string, error
 
 // PortEndpoint returns the endpoint string (host:port) for the specified container port and protocol.
 func (c *cliContainer) PortEndpoint(ctx context.Context, port string, proto string) (string, error) {
-	pNum, parsedProto := parsePort(port)
+	pNum, parsedProto := wait.ParsePort(port)
 	if proto == "" {
 		proto = parsedProto
 	}
@@ -364,7 +327,11 @@ func (c *cliContainer) Stop(ctx context.Context, timeout *time.Duration) error {
 
 // Terminate stops and deletes the container. Terminate is idempotent.
 func (c *cliContainer) Terminate(ctx context.Context) error {
+	log.Printf("Terminating container %s...", c.id)
 	c.isRunning.Store(false)
+	if c.logCancel != nil {
+		c.logCancel()
+	}
 
 	if stopErr := c.provider.StopContainer(ctx, c.id, nil); stopErr != nil && !isNotFoundError(stopErr) {
 		log.Printf("applecontainer: stop failed during terminate: %v", stopErr)
@@ -373,6 +340,12 @@ func (c *cliContainer) Terminate(ctx context.Context) error {
 	delErr := c.provider.DeleteContainer(ctx, c.id, true)
 	if delErr != nil && !isNotFoundError(delErr) {
 		return delErr
+	}
+
+	for _, cleanup := range c.req.Cleanups {
+		if err := cleanup(ctx); err != nil {
+			log.Printf("applecontainer: cleanup failed: %v", err)
+		}
 	}
 
 	return nil
@@ -395,7 +368,7 @@ func (c *cliContainer) CopyToContainer(ctx context.Context, content []byte, cont
 
 // CopyFileToContainer copies a host file to a path inside the container.
 func (c *cliContainer) CopyFileToContainer(ctx context.Context, hostPath, containerPath string, mode int64) error {
-	content, err := os.ReadFile(hostPath)
+	content, err := os.ReadFile(filepath.Clean(hostPath))
 	if err != nil {
 		return fmt.Errorf("applecontainer: copy file to container: failed to read host file: %w", err)
 	}
@@ -407,7 +380,29 @@ func (c *cliContainer) CopyFileFromContainer(ctx context.Context, path string) (
 	return c.provider.CopyFileFromContainer(ctx, c.id, path)
 }
 
-// Networks returns the names of the networks the container is attached to.
+type waitTarget struct {
+	*cliContainer
+}
+
+func (w waitTarget) Exec(ctx context.Context, cmd []string, opts ...any) (int, []byte, error) {
+	return w.cliContainer.Exec(ctx, cmd)
+}
+
+func (w waitTarget) StateStatus(ctx context.Context) (string, error) {
+	return w.cliContainer.StateStatus(ctx)
+}
+
+func (w waitTarget) StateExitCode(ctx context.Context) (int, error) {
+	return w.cliContainer.StateExitCode(ctx)
+}
+
+func (w waitTarget) Logs(ctx context.Context) (io.ReadCloser, error) {
+	return w.provider.ContainerLogs(ctx, w.id, true, 0)
+}
+
+func (w waitTarget) CopyFileFromContainer(ctx context.Context, path string) (io.ReadCloser, error) {
+	return w.cliContainer.CopyFileFromContainer(ctx, path)
+}
 func (c *cliContainer) Networks(ctx context.Context) ([]string, error) {
 	ins, err := c.Inspect(ctx)
 	if err != nil {
@@ -418,16 +413,6 @@ func (c *cliContainer) Networks(ctx context.Context) ([]string, error) {
 		networks = append(networks, net.Network)
 	}
 	return networks, nil
-}
-
-func parsePort(port string) (int, string) {
-	parts := strings.Split(port, "/")
-	pNum, _ := strconv.Atoi(parts[0])
-	proto := ""
-	if len(parts) > 1 {
-		proto = parts[1]
-	}
-	return pNum, proto
 }
 
 func isNotFoundError(err error) bool {

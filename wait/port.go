@@ -11,25 +11,13 @@ import (
 
 // PortStrategy waits for a port to start listening.
 type PortStrategy struct {
-	Port           string
-	PollInterval   time.Duration
-	startupTimeout time.Duration
-}
-
-// Timeout returns the custom timeout for this strategy.
-func (s *PortStrategy) Timeout() time.Duration {
-	return s.startupTimeout
+	Port         string
+	PollInterval time.Duration
 }
 
 // WithPollInterval sets the polling interval.
 func (s *PortStrategy) WithPollInterval(d time.Duration) *PortStrategy {
 	s.PollInterval = d
-	return s
-}
-
-// WithStartupTimeout sets the custom startup timeout.
-func (s *PortStrategy) WithStartupTimeout(d time.Duration) *PortStrategy {
-	s.startupTimeout = d
 	return s
 }
 
@@ -43,7 +31,7 @@ func ForListeningPort(port string) *PortStrategy {
 
 // WaitUntilReady dials the container port repeatedly until success or context timeout.
 func (s *PortStrategy) WaitUntilReady(ctx context.Context, target StrategyTarget) error {
-	pNum, proto := parsePort(s.Port)
+	pNum, proto := ParsePort(s.Port)
 	if pNum <= 0 {
 		return fmt.Errorf("invalid port specification: %s", s.Port)
 	}
@@ -77,8 +65,8 @@ func (s *PortStrategy) WaitUntilReady(ctx context.Context, target StrategyTarget
 	}
 }
 
-// Helper to parse port number and protocol from a port string (e.g. "80/tcp" or "80").
-func parsePort(port string) (int, string) {
+// ParsePort parses a port number and protocol from a port string (e.g. "80/tcp" or "80").
+func ParsePort(port string) (int, string) {
 	parts := strings.Split(port, "/")
 	pNum, _ := strconv.Atoi(parts[0])
 	proto := "tcp"

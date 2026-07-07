@@ -7,19 +7,7 @@ import (
 
 // ExitStrategy waits for a container to stop/exit (i.e. status is not "running").
 type ExitStrategy struct {
-	startupTimeout time.Duration
-	PollInterval   time.Duration
-}
-
-// Timeout returns the custom timeout for this strategy.
-func (s *ExitStrategy) Timeout() time.Duration {
-	return s.startupTimeout
-}
-
-// WithStartupTimeout sets the custom startup timeout.
-func (s *ExitStrategy) WithStartupTimeout(d time.Duration) *ExitStrategy {
-	s.startupTimeout = d
-	return s
+	PollInterval time.Duration
 }
 
 // WithPollInterval sets the polling interval.

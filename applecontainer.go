@@ -3,9 +3,10 @@ package applecontainer
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"sync"
@@ -27,7 +28,7 @@ func SessionID() string {
 	sessionOnce.Do(func() {
 		pid := os.Getppid()
 		now := time.Now().UnixNano()
-		hash := sha1.Sum([]byte(fmt.Sprintf("applecontainer-go:%d:%d", pid, now)))
+		hash := sha256.Sum256([]byte(fmt.Sprintf("applecontainer-go:%d:%d", pid, now)))
 		sessionID = hex.EncodeToString(hash[:])
 	})
 	return sessionID
@@ -50,7 +51,7 @@ func defaultLogger(_ *ContainerRequest) *slog.Logger {
 func Run(ctx context.Context, img string, opts ...ContainerCustomizer) (*cliContainer, error) {
 	req := &ContainerRequest{Image: img}
 	for _, o := range opts {
-		if err := o.Customize(req); err != nil {
+		if err := o(req); err != nil {
 			return nil, fmt.Errorf("applecontainer: customize: %w", err)
 		}
 	}
@@ -64,19 +65,108 @@ func Run(ctx context.Context, img string, opts ...ContainerCustomizer) (*cliCont
 	}
 
 	provider := newCLIProvider(Read())
+
+	// 1. Build image if requested
+	if cf := req.FromContainerfile; cf.Context != "" {
+		log.Printf("Building image from Containerfile in %s...", cf.Context)
+		tag := ""
+		if len(cf.Tags) > 0 && cf.Tags[0] != "" {
+			tag = cf.Tags[0]
+		} else {
+			tag = randomString("applecontainer-")
+		}
+
+		args := []string{"build", "-t", tag, "--progress", "plain"}
+		if cf.File != "" {
+			args = append(args, "-f", cf.File)
+		}
+		for k, v := range cf.BuildArgs {
+			if v != nil {
+				args = append(args, "--build-arg", fmt.Sprintf("%s=%s", k, *v))
+			}
+		}
+		if cf.Target != "" {
+			args = append(args, "--target", cf.Target)
+		}
+		if cf.NoCache {
+			args = append(args, "--no-cache")
+		}
+		if cf.Pull {
+			args = append(args, "--pull")
+		}
+		if cf.Platform != "" {
+			args = append(args, "--platform", cf.Platform)
+		}
+		for k, v := range cf.Secrets {
+			args = append(args, "--secret", fmt.Sprintf("id=%s,src=%s", k, v))
+		}
+		args = append(args, cf.Context)
+
+		if _, _, _, err := provider.runner.Run(ctx, args, nil); err != nil {
+			return nil, fmt.Errorf("applecontainer: build failed: %w", err)
+		}
+
+		req.Image = tag
+		if !cf.KeepImage {
+			req.Cleanups = append(req.Cleanups, func(ctx context.Context) error {
+				_, _, _, err := provider.runner.Run(ctx, []string{"image", "delete", tag}, nil)
+				return err
+			})
+		}
+	}
+
+	// 2. Create container
+	created, err := provider.CreateContainer(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
 	c := &cliContainer{
 		provider: provider,
+		id:       created.id,
 		image:    req.Image,
 		req:      *req,
 		log:      defaultLogger(req),
 	}
 
-	c.lifecycle = []ContainerLifecycleHooks{
-		combineContainerHooks(defaultHooks(req, c), req.LifecycleHooks),
+	// 3. Copy files to container
+	for _, file := range req.Files {
+		content, err := os.ReadFile(file.HostFilePath)
+		if err != nil {
+			return c, fmt.Errorf("applecontainer: failed to read host file %s for copy: %w", file.HostFilePath, err)
+		}
+		if err := c.CopyToContainer(ctx, content, file.ContainerFilePath, file.FileMode); err != nil {
+			return c, fmt.Errorf("applecontainer: failed to copy file %s to container: %w", file.HostFilePath, err)
+		}
 	}
 
-	if err := c.executeLifecycle(ctx, true); err != nil {
+	// 4. Start container
+	if err := c.provider.StartContainer(ctx, c); err != nil {
 		return c, err
+	}
+	log.Printf("Container %s started.", c.GetContainerID())
+	c.isRunning.Store(true)
+
+	// 5. Setup logs if requested
+	if len(req.LogWriters) > 0 {
+		logCtx, cancel := context.WithCancel(context.Background())
+		c.logCancel = cancel
+		rc, err := c.provider.ContainerLogs(logCtx, c.id, true, 0)
+		if err != nil {
+			return c, fmt.Errorf("applecontainer: failed to start log follower: %w", err)
+		}
+		go func() {
+			defer func() { _ = rc.Close() }()
+			mw := io.MultiWriter(req.LogWriters...)
+			_, _ = io.Copy(mw, rc)
+		}()
+	}
+
+	// 6. Wait until ready
+	if req.WaitingFor != nil {
+		if err := req.WaitingFor.WaitUntilReady(ctx, waitTarget{c}); err != nil {
+			return c, fmt.Errorf("applecontainer: wait strategy failed: %w", err)
+		}
 	}
 
 	return c, nil

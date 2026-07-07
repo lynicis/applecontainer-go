@@ -7,19 +7,7 @@ import (
 
 // HealthStrategy waits for the container status to be "running" and exit code to be 0.
 type HealthStrategy struct {
-	startupTimeout time.Duration
-	PollInterval   time.Duration
-}
-
-// Timeout returns the custom timeout for this strategy.
-func (s *HealthStrategy) Timeout() time.Duration {
-	return s.startupTimeout
-}
-
-// WithStartupTimeout sets the custom startup timeout.
-func (s *HealthStrategy) WithStartupTimeout(d time.Duration) *HealthStrategy {
-	s.startupTimeout = d
-	return s
+	PollInterval time.Duration
 }
 
 // WithPollInterval sets the polling interval.

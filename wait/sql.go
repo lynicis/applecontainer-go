@@ -8,28 +8,16 @@ import (
 
 // SQLStrategy waits for a database to accept queries.
 type SQLStrategy struct {
-	Port           string
-	Driver         string
-	DBURL          func(host string, port int) string
-	Query          string
-	startupTimeout time.Duration
-	PollInterval   time.Duration
-}
-
-// Timeout returns the custom timeout for this strategy.
-func (s *SQLStrategy) Timeout() time.Duration {
-	return s.startupTimeout
+	Port         string
+	Driver       string
+	DBURL        func(host string, port int) string
+	Query        string
+	PollInterval time.Duration
 }
 
 // WithQuery sets the validation query to run.
 func (s *SQLStrategy) WithQuery(q string) *SQLStrategy {
 	s.Query = q
-	return s
-}
-
-// WithStartupTimeout sets the custom startup timeout.
-func (s *SQLStrategy) WithStartupTimeout(d time.Duration) *SQLStrategy {
-	s.startupTimeout = d
 	return s
 }
 

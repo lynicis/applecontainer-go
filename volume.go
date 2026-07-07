@@ -35,55 +35,12 @@ type VolumeRequest struct {
 	Options map[string]string
 }
 
-// VolumeOption sets volume request parameters.
-type VolumeOption func(*VolumeRequest)
-
-// WithVolumeNameOption sets the volume name.
-func WithVolumeNameOption(name string) VolumeOption {
-	return func(r *VolumeRequest) {
-		r.Name = name
-	}
-}
-
-// WithVolumeLabels sets labels on the volume.
-func WithVolumeLabels(labels map[string]string) VolumeOption {
-	return func(r *VolumeRequest) {
-		if r.Labels == nil {
-			r.Labels = make(map[string]string)
-		}
-		for k, v := range labels {
-			r.Labels[k] = v
-		}
-	}
-}
-
-// WithVolumeSize sets the size of the volume.
-func WithVolumeSize(size string) VolumeOption {
-	return func(r *VolumeRequest) {
-		r.Size = size
-	}
-}
-
-// WithVolumeOpt adds options to the volume creation.
-func WithVolumeOpt(key, val string) VolumeOption {
-	return func(r *VolumeRequest) {
-		if r.Options == nil {
-			r.Options = make(map[string]string)
-		}
-		r.Options[key] = val
-	}
-}
-
 func generateVolumeName() string {
 	return randomString("apple-vol-")
 }
 
 // NewVolume creates a volume.
-func NewVolume(ctx context.Context, opts ...VolumeOption) (Volume, error) {
-	req := VolumeRequest{}
-	for _, o := range opts {
-		o(&req)
-	}
+func NewVolume(ctx context.Context, req VolumeRequest) (Volume, error) {
 	if req.Name == "" {
 		req.Name = generateVolumeName()
 	}

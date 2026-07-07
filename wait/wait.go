@@ -3,7 +3,6 @@ package wait
 import (
 	"context"
 	"io"
-	"time"
 )
 
 // Strategy defines the interface for container wait strategies.
@@ -20,9 +19,4 @@ type StrategyTarget interface {
 	StateStatus(ctx context.Context) (string, error)
 	StateExitCode(ctx context.Context) (int, error)
 	CopyFileFromContainer(ctx context.Context, path string) (io.ReadCloser, error)
-}
-
-// StrategyTimeout defines an interface for strategies with custom timeouts.
-type StrategyTimeout interface {
-	Timeout() time.Duration
 }

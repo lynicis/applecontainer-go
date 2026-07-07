@@ -16,12 +16,12 @@ func TestNewVolume(t *testing.T) {
 	providerRunnerOverride = runner
 	defer func() { providerRunnerOverride = nil }()
 
-	vol, err := NewVolume(context.Background(),
-		WithVolumeNameOption("my-custom-vol"),
-		WithVolumeLabels(map[string]string{"env": "test"}),
-		WithVolumeSize("10GB"),
-		WithVolumeOpt("type", "tmpfs"),
-	)
+	vol, err := NewVolume(context.Background(), VolumeRequest{
+		Name:    "my-custom-vol",
+		Labels:  map[string]string{"env": "test"},
+		Size:    "10GB",
+		Options: map[string]string{"type": "tmpfs"},
+	})
 	if err != nil {
 		t.Fatalf("failed to create volume: %v", err)
 	}

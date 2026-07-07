@@ -15,7 +15,7 @@ func Default() *slog.Logger { return defaultLogger }
 func SetDefault(l *slog.Logger) { defaultLogger = l }
 
 func Printf(format string, v ...any) {
-	defaultLogger.Info("applecontainer", "msg", fmt.Sprintf(format, v...))
+	defaultLogger.Info(fmt.Sprintf(format, v...))
 }
 
 func TestLogger(tb testing.TB) *slog.Logger {

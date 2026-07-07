@@ -36,7 +36,7 @@ func (s *ForAnyStrategy) WaitUntilReady(ctx context.Context, target StrategyTarg
 		wg.Add(1)
 		go func(idx int, st Strategy) {
 			defer wg.Done()
-			err := runStrategy(ctx, st, target)
+			err := st.WaitUntilReady(ctx, target)
 			if err == nil {
 				select {
 				case successChan <- struct{}{}:
@@ -63,16 +63,7 @@ func (s *ForAnyStrategy) WaitUntilReady(ctx context.Context, target StrategyTarg
 		// Check if at least one succeeded (should not happen if doneChan completes without successChan,
 		// but is a safe fallback).
 		// Return combined errors.
-		var combinedErr error
-		for _, e := range errs {
-			if e != nil {
-				if combinedErr == nil {
-					combinedErr = e
-				} else {
-					combinedErr = errors.New(combinedErr.Error() + "; " + e.Error())
-				}
-			}
-		}
+		combinedErr := errors.Join(errs...)
 		if combinedErr == nil {
 			return errors.New("any wait strategy failed: no strategies ran")
 		}

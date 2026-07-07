@@ -2,7 +2,6 @@ package applecontainer
 
 import (
 	"context"
-	"os"
 	"testing"
 )
 
@@ -26,12 +25,4 @@ func CleanupNetwork(t testing.TB, nw Network) {
 			t.Logf("applecontainer: failed to remove network %q during cleanup: %v", nw.Name(), err)
 		}
 	})
-}
-
-// StdoutLogConsumer prints container logs directly to stdout.
-type StdoutLogConsumer struct{}
-
-// Accept writes the log content followed by a newline to stdout.
-func (s *StdoutLogConsumer) Accept(l Log) {
-	_, _ = os.Stdout.Write(append(l.Content, '\n'))
 }

@@ -7,20 +7,8 @@ import (
 
 // FileStrategy waits for a file to exist inside the container.
 type FileStrategy struct {
-	Path           string
-	startupTimeout time.Duration
-	PollInterval   time.Duration
-}
-
-// Timeout returns the custom timeout for this strategy.
-func (s *FileStrategy) Timeout() time.Duration {
-	return s.startupTimeout
-}
-
-// WithStartupTimeout sets the custom startup timeout.
-func (s *FileStrategy) WithStartupTimeout(d time.Duration) *FileStrategy {
-	s.startupTimeout = d
-	return s
+	Path         string
+	PollInterval time.Duration
 }
 
 // WithPollInterval sets the polling interval.

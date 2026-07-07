@@ -16,15 +16,15 @@ func TestNewNetwork(t *testing.T) {
 	providerRunnerOverride = runner
 	defer func() { providerRunnerOverride = nil }()
 
-	nw, err := NewNetwork(context.Background(),
-		WithNetworkNameOption("my-custom-net"),
-		WithNetworkLabels(map[string]string{"env": "test"}),
-		WithNetworkDriver("bridge"),
-		WithInternal(true),
-		WithEnableIPv6(true),
-		WithSubnet("10.0.0.0/24"),
-		WithSubnetV6("fd00::/64"),
-	)
+	nw, err := NewNetwork(context.Background(), NetworkRequest{
+		Name:       "my-custom-net",
+		Labels:     map[string]string{"env": "test"},
+		Driver:     "bridge",
+		Internal:   true,
+		EnableIPv6: true,
+		Subnet:     "10.0.0.0/24",
+		SubnetV6:   "fd00::/64",
+	})
 	if err != nil {
 		t.Fatalf("failed to create network: %v", err)
 	}

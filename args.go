@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"net"
 	"strconv"
-	"strings"
+
+	"github.com/lynicis/applecontainer-go/wait"
 )
 
 // allocateEphemeralPort allocates a free port on 127.0.0.1.
@@ -18,16 +19,7 @@ func allocateEphemeralPort() (int, error) {
 	return addr.Port, nil
 }
 
-// parsePortNo splits a port string like "80/tcp" into (80, "tcp").
-func parsePortNo(port string) (int, string) {
-	parts := strings.Split(port, "/")
-	pNum, _ := strconv.Atoi(parts[0])
-	proto := "tcp"
-	if len(parts) > 1 {
-		proto = strings.ToLower(parts[1])
-	}
-	return pNum, proto
-}
+// wait.ParsePort splits a port string like "80/tcp" into (80, "tcp").
 
 // buildCreateArgs builds the argument list for `container create` from a ContainerRequest.
 func buildCreateArgs(req *ContainerRequest, cidFile string) ([]string, error) {
@@ -116,7 +108,7 @@ func buildCreateArgs(req *ContainerRequest, cidFile string) ([]string, error) {
 			req.HostPorts = make(map[string]int)
 		}
 		for _, portStr := range req.ExposedPorts {
-			containerPort, proto := parsePortNo(portStr)
+			containerPort, proto := wait.ParsePort(portStr)
 			if containerPort <= 0 {
 				continue
 			}

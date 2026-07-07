@@ -22,13 +22,7 @@ type HTTPStrategy struct {
 	Method            string
 	StatusCodeMatcher func(int) bool
 	ResponseMatcher   func(io.Reader) bool
-	startupTimeout    time.Duration
 	PollInterval      time.Duration
-}
-
-// Timeout returns the custom timeout for this strategy.
-func (s *HTTPStrategy) Timeout() time.Duration {
-	return s.startupTimeout
 }
 
 // WithPort sets the target port.
@@ -68,12 +62,6 @@ func (s *HTTPStrategy) WithResponseMatcher(matcher func(io.Reader) bool) *HTTPSt
 	return s
 }
 
-// WithStartupTimeout sets the custom startup timeout.
-func (s *HTTPStrategy) WithStartupTimeout(d time.Duration) *HTTPStrategy {
-	s.startupTimeout = d
-	return s
-}
-
 // WithPollInterval sets the polling interval.
 func (s *HTTPStrategy) WithPollInterval(d time.Duration) *HTTPStrategy {
 	s.PollInterval = d
@@ -104,6 +92,7 @@ func (s *HTTPStrategy) WaitUntilReady(ctx context.Context, target StrategyTarget
 	}
 
 	transport := &http.Transport{
+		// #nosec G402
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 	if s.TLSConfig != nil {

@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -90,7 +91,7 @@ func (p *cliProvider) CreateContainer(ctx context.Context, req *ContainerRequest
 		return nil, fmt.Errorf("applecontainer: create container failed: %w", err)
 	}
 
-	cidBytes, err := os.ReadFile(cidFile)
+	cidBytes, err := os.ReadFile(filepath.Clean(cidFile))
 	if err != nil {
 		return nil, fmt.Errorf("applecontainer: failed to read cidfile: %w", err)
 	}
@@ -281,7 +282,8 @@ func (p *cliProvider) CopyToContainer(ctx context.Context, id, containerPath str
 	}
 	_ = tmpFile.Close()
 
-	if err := os.Chmod(tmpPath, os.FileMode(mode)); err != nil {
+	// #nosec G115
+	if err := os.Chmod(tmpPath, os.FileMode(uint32(mode))); err != nil {
 		return fmt.Errorf("applecontainer: failed to chmod temp file: %w", err)
 	}
 
@@ -331,7 +333,7 @@ func (p *cliProvider) CopyFileFromContainer(ctx context.Context, id, path string
 		return nil, fmt.Errorf("applecontainer: copy from container failed: %w", err)
 	}
 
-	f, err := os.Open(tmpPath)
+	f, err := os.Open(filepath.Clean(tmpPath))
 	if err != nil {
 		return nil, fmt.Errorf("applecontainer: failed to open copied file: %w", err)
 	}
