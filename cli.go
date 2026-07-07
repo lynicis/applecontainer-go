@@ -22,6 +22,7 @@ type execRunner struct{ bin string }
 func newExecRunner(bin string) *execRunner { return &execRunner{bin: bin} }
 
 func (r *execRunner) Run(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
+	// #nosec G204
 	cmd := exec.CommandContext(ctx, r.bin, args...)
 	if len(stdin) > 0 {
 		cmd.Stdin = bytes.NewReader(stdin)
@@ -43,6 +44,7 @@ func (r *execRunner) Run(ctx context.Context, args []string, stdin []byte) ([]by
 }
 
 func (r *execRunner) Start(ctx context.Context, args []string, stdin io.Reader) (*exec.Cmd, io.Reader, io.Reader, error) {
+	// #nosec G204
 	cmd := exec.CommandContext(ctx, r.bin, args...)
 	cmd.Stdin = stdin
 	outPR, outPW := io.Pipe()

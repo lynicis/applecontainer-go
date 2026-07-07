@@ -60,7 +60,7 @@ func readConfig() Config {
 		PullTimeout:    5 * time.Minute,
 	}
 	if propertiesPath != "" {
-		if b, err := os.ReadFile(propertiesPath); err == nil {
+		if b, err := os.ReadFile(filepath.Clean(propertiesPath)); err == nil {
 			applyProperties(&c, string(b))
 		}
 	}
