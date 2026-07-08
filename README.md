@@ -229,33 +229,38 @@ c, err := applecontainer.Run(ctx, "postgres:alpine",
 
 ## Benchmarks
 
-Results from live benchmark code in `benchmarks/`. Run with:
+Head-to-head `applecontainer-go` vs `testcontainers-go` (Docker). Every benchmark runs the same operation on both runtimes via the `RunWithBoth` harness.
+
 ```bash
-cd benchmarks && go test -bench=. -benchmem -benchtime=5x ./...
+cd benchmarks && APPLECONTAINER_BENCHMARK=1 go test -bench=. -benchmem -benchtime=5x ./...
 ```
 
-**Env**: Go 1.26.4 · darwin/arm64 · Apple M5 · Postgres 15 via testcontainers-go.
+| Operation | `applecontainer-go` | `testcontainers-go` | Winner |
+| :--- | ---: | ---: | :---: |
+| Stop | 242ms | 248ms | **🍎 Apple** |
+| Start (restart) | 69ms | 249ms | **🍎 Apple** (3.6x faster) |
+| Terminate | 265ms | 257ms | **🐳 Docker** |
+| Inspect | 273ms | 232ms | **🐳 Docker** (1.2x faster) |
+| Exec (`echo hello`) | 290ms | 391ms | **🍎 Apple** (1.3x faster) |
+| Copy To (1 KB) | 270ms | 247ms | **🐳 Docker** |
+| Copy To (1 MB) | 261ms | 281ms | **🍎 Apple** |
+| Copy From (1 KB) | 260ms | 258ms | **🐳 Docker** |
+| Copy From (1 MB) | 318ms | 290ms | **🐳 Docker** |
+| Logs (10k lines) | 5.54s | 10.23s | **🍎 Apple** (1.8x faster) |
+| Wait: HTTP | 621ms | 634ms | **🍎 Apple** |
+| Wait: SQL (pgx) | 1.73s | 767ms | **🐳 Docker** (2.3x faster) |
+| Wait: Exec | 737ms | 656ms | **🐳 Docker** |
+| Wait: Health | 805ms | 340ms | **🐳 Docker** (2.4x faster) |
+| Wait: Composite | 733ms | 397ms | **🐳 Docker** (1.8x faster) |
+| Wait: Log (spam) | 611ms | 203ms | **🐳 Docker** (3.0x faster) |
+| Parallel startup (2) | 1.53s | 595ms | **🐳 Docker** (2.6x faster) |
+| Parallel startup (4) | 3.14s | 1.03s | **🐳 Docker** (3.0x faster) |
+| Parallel startup (8) | 6.24s | 1.81s | **🐳 Docker** (3.4x faster) |
+| TCP Latency (Redis) | 3.34s | 380ms | **🐳 Docker** (8.8x faster) |
 
-### Driver ops (pgx vs pq vs gorm)
+*(Specs: Go 1.24 · darwin/arm64 · Apple M5)*
 
-| Op | pgx ns/op | pgx B/op | pgx allocs | pq ns/op | pq B/op | pq allocs | gorm ns/op | gorm B/op | gorm allocs |
-| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Insert | 127k | 115 | 3 | 247k | 560 | 16 | 375k | 6,092 | 74 |
-| Bulk (100) | 250k | 81k | 311 | 365k | 85k | 418 | 578k | 42k | 695 |
-| Select PK | 223k | 384 | 8 | 240k | 889 | 26 | 143k | 4,990 | 61 |
-| Select filter | 132k | 320 | 3 | 229k | 864 | 22 | 145k | 12.5k | 352 |
-| Update | 169k | 121 | 3 | 237k | 592 | 17 | 375k | 5,534 | 61 |
-| Delete | 177k | 9 | 1 | 135k | 105 | 5 | 137k | 1,016 | 12 |
-
-pgx wins on writes + memory. gorm fastest on selects (query cache), 10-70x allocations.
-
-### testcontainers module startup
-
-| Module | ready (ms) | teardown (ms) | B/op | allocs/op |
-| :--- | ---: | ---: | ---: | ---: |
-| postgres:15-alpine | 635 | 160 | 1.4M | 7,821 |
-| redis:alpine | 236 | 203 | 693k | 4,146 |
-| nginx:alpine | 307 | 179 | 500k | 2,968 |
+**Takeaway:** `applecontainer-go` excels at raw, synchronous container lifecycle operations (like cold restarts and bulk log retrieval). However, Docker is currently much faster at handling highly parallel workloads, network polling (Wait strategies), and TCP loopback latency. Run the suite yourself to verify on your hardware.
 
 ---
 
