@@ -15,6 +15,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type fakeTarget struct {
@@ -360,4 +362,45 @@ type CustomizeStrategy func(ctx context.Context, target StrategyTarget) error
 
 func (c CustomizeStrategy) WaitUntilReady(ctx context.Context, target StrategyTarget) error {
 	return c(ctx, target)
+}
+
+func TestWaitOptionsProper(t *testing.T) {
+	dl := time.Second
+	all := ForAll().WithDeadline(dl)
+	assert.Equal(t, dl, all.Deadline)
+
+	any := ForAny().WithDeadline(dl)
+	assert.Equal(t, dl, any.Deadline)
+
+	ex := ForExec([]string{"cmd"}).WithExitCodeMatcher(func(i int) bool { return i == 1 }).WithPollInterval(dl)
+	assert.Equal(t, dl, ex.PollInterval)
+	assert.True(t, ex.ExitCodeMatcher(1))
+	assert.False(t, ex.ExitCodeMatcher(0))
+
+	ext := ForExit().WithPollInterval(dl)
+	assert.Equal(t, dl, ext.PollInterval)
+
+	fl := ForFile("f").WithPollInterval(dl)
+	assert.Equal(t, dl, fl.PollInterval)
+
+	hl := ForHealth().WithPollInterval(dl)
+	assert.Equal(t, dl, hl.PollInterval)
+
+	ht := ForHTTP("").WithTLS().WithBasicAuth("u", "p").WithMethod("POST").
+		WithStatusCodeMatcher(func(status int) bool { return status == 200 }).
+		WithResponseMatcher(func(body io.Reader) bool { return true }).
+		WithPollInterval(dl)
+	assert.True(t, ht.UseTLS)
+	assert.Equal(t, "POST", ht.Method)
+	assert.Equal(t, dl, ht.PollInterval)
+
+	lg := ForLog("").WithPollInterval(dl)
+	assert.Equal(t, dl, lg.PollInterval)
+
+	pt := ForListeningPort("").WithPollInterval(dl)
+	assert.Equal(t, dl, pt.PollInterval)
+
+	sq := ForSQL("80", "d", func(h string, p int) string { return "" }).WithQuery("q").WithPollInterval(dl)
+	assert.Equal(t, dl, sq.PollInterval)
+	assert.Equal(t, "q", sq.Query)
 }

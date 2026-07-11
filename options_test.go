@@ -5,6 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/lynicis/applecontainer-go/wait"
 )
 
@@ -151,4 +154,26 @@ func TestAllOptions(t *testing.T) {
 	if req.Memory != 512 {
 		t.Errorf("unexpected memory: %d", req.Memory)
 	}
+}
+
+func TestOptionsProper(t *testing.T) {
+	req := &ContainerRequest{}
+
+	err := WithCmdArgs("arg1", "arg2")(req)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"arg1", "arg2"}, req.Cmd)
+
+	err = WithCmd("cmd1")(req)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"cmd1"}, req.Cmd)
+
+	strat := wait.ForLog("ready")
+	err = WithWaitingFor(strat)(req)
+	require.NoError(t, err)
+	assert.Equal(t, strat, req.WaitingFor)
+
+	req.WaitingFor = nil
+	err = WithAdditionalWaitStrategy(strat)(req)
+	require.NoError(t, err)
+	assert.NotNil(t, req.WaitingFor)
 }

@@ -3,7 +3,11 @@ package applecontainer
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSessionID_Stability(t *testing.T) {
@@ -125,4 +129,26 @@ func TestRun_AppliesOptionsAndOrchestrates(t *testing.T) {
 	if !c.IsRunning() {
 		t.Error("expected container to be running")
 	}
+}
+
+func TestApplecontainerOptionsProper(t *testing.T) {
+	rs := randomString("prefix-")
+	require.Greater(t, len(rs), len("prefix-"))
+	assert.True(t, strings.HasPrefix(rs, "prefix-"))
+
+	var gotArgs []string
+	runner := &fakeRunner{
+		runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
+			gotArgs = args
+			return nil, nil, 0, nil
+		},
+	}
+	oldOverride := providerRunnerOverride
+	providerRunnerOverride = runner
+	defer func() { providerRunnerOverride = oldOverride }()
+
+	err := Prune(context.Background())
+	require.NoError(t, err)
+	require.Len(t, gotArgs, 1)
+	assert.Equal(t, "prune", gotArgs[0])
 }

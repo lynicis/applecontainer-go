@@ -3,6 +3,9 @@ package applecontainer
 import (
 	"context"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewNetwork(t *testing.T) {
@@ -50,4 +53,22 @@ func TestNewNetwork(t *testing.T) {
 	if len(capturedArgs) != 3 || capturedArgs[0] != "network" || capturedArgs[1] != "delete" || capturedArgs[2] != "my-custom-net" {
 		t.Errorf("unexpected delete args: %v", capturedArgs)
 	}
+}
+
+func TestNetworkOptionsProper(t *testing.T) {
+	name := generateNetworkName()
+	assert.NotEmpty(t, name)
+
+	req := &ContainerRequest{}
+	nw := &cliNetwork{name: "fake"}
+
+	customizer := WithNetwork([]string{"alias"}, nw)
+	err := customizer(req)
+	require.NoError(t, err)
+
+	require.Len(t, req.Networks, 1)
+	assert.Equal(t, "fake", req.Networks[0])
+
+	require.Len(t, req.NetworkAliases["fake"], 1)
+	assert.Equal(t, "alias", req.NetworkAliases["fake"][0])
 }

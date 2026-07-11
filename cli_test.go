@@ -2,7 +2,12 @@ package applecontainer
 
 import (
 	"context"
+	"os"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestExecRunnerReturnsStdout(t *testing.T) {
@@ -39,4 +44,17 @@ func TestExecRunnerPropagatesExitCode(t *testing.T) {
 	if code != 7 {
 		t.Fatalf("code=%d want 7", code)
 	}
+}
+
+func TestCliProper(t *testing.T) {
+	e := &runError{bin: "bin", args: []string{"a"}, code: 1, stderr: "err", cause: os.ErrClosed}
+	assert.ErrorIs(t, e.Unwrap(), os.ErrClosed)
+	assert.Equal(t, "bin a: exit 1: err", e.Error())
+
+	runner := newExecRunner("echo")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	cmd, _, _, err := runner.Start(ctx, []string{"hello"}, nil)
+	require.NoError(t, err)
+	assert.NotNil(t, cmd)
 }

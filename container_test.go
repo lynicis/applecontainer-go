@@ -3,9 +3,15 @@ package applecontainer
 import (
 	"context"
 	"errors"
+	"io"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/lynicis/applecontainer-go/log"
 )
@@ -381,4 +387,97 @@ func TestContainerTerminateIdempotency(t *testing.T) {
 			t.Errorf("expected error message to contain 'permission denied', got %v", err)
 		}
 	}
+}
+
+func TestContainerDelegationProper(t *testing.T) {
+	runner := &fakeRunner{
+		runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
+			if len(args) > 0 && args[0] == "inspect" {
+				return []byte(`[{
+					"id": "cov-id",
+					"status": {
+						"state": "running",
+						"exitCode": 42,
+						"networks": [{
+							"network": "bridge",
+							"ipv4Address": "1.2.3.4"
+						}]
+					}
+				}]`), nil, 0, nil
+			}
+			return []byte{}, []byte{}, 0, nil
+		},
+		startFn: func(ctx context.Context, args []string, stdin io.Reader) (*exec.Cmd, io.Reader, io.Reader, error) {
+			return nil, strings.NewReader(""), strings.NewReader(""), nil
+		},
+	}
+	p := &cliProvider{
+		runner: runner,
+		log:    log.TestLogger(t),
+	}
+	c := &cliContainer{
+		provider: p,
+		id:       "cov-id",
+	}
+	ctx := context.Background()
+
+	state, err := c.State(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "running", state.Status)
+
+	status, err := c.StateStatus(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "running", status)
+
+	code, err := c.StateExitCode(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 42, code)
+
+	nets, err := c.Networks(ctx)
+	require.NoError(t, err)
+	require.Len(t, nets, 1)
+	assert.Equal(t, "bridge", nets[0])
+
+	rc, err := c.Logs(ctx)
+	require.NoError(t, err)
+	assert.NotNil(t, rc)
+
+	exit, _, err := c.Exec(ctx, []string{"ls"})
+	require.NoError(t, err)
+	assert.Equal(t, 0, exit)
+
+	tmpFile, err := os.CreateTemp("", "cov-test")
+	require.NoError(t, err)
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
+	_, _ = tmpFile.WriteString("hello")
+	_ = tmpFile.Close()
+
+	err = c.CopyToContainer(ctx, []byte("hello"), "/tmp/hello", 0644)
+	require.NoError(t, err)
+
+	err = c.CopyFileToContainer(ctx, tmpFile.Name(), "/tmp/hello", 0644)
+	require.NoError(t, err)
+
+	_, err = c.CopyFileFromContainer(ctx, "/tmp/hello")
+	require.NoError(t, err)
+
+	wt := waitTarget{c}
+	_, _, err = wt.Exec(ctx, []string{"ls"})
+	require.NoError(t, err)
+
+	s, err := wt.StateStatus(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "running", s)
+
+	ec, err := wt.StateExitCode(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 42, ec)
+
+	r, err := wt.Logs(ctx)
+	require.NoError(t, err)
+	assert.NotNil(t, r)
+
+	cf, err := wt.CopyFileFromContainer(ctx, "/tmp/hello")
+	require.NoError(t, err)
+	assert.NotNil(t, cf)
 }
