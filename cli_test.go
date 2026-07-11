@@ -2,6 +2,7 @@ package applecontainer
 
 import (
 	"context"
+	"io"
 	"os"
 	"testing"
 	"time"
@@ -57,4 +58,23 @@ func TestCliProper(t *testing.T) {
 	cmd, _, _, err := runner.Start(ctx, []string{"hello"}, nil)
 	require.NoError(t, err)
 	assert.NotNil(t, cmd)
+}
+
+func TestCLIStartAndRun(t *testing.T) {
+	r := newExecRunner("echo")
+
+	// Test Run
+	stdout, _, code, err := r.Run(context.Background(), []string{"hello"}, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, code)
+	assert.Contains(t, string(stdout), "hello")
+
+	// Test Start
+	cmd, pr, pw, err := r.Start(context.Background(), []string{"hello"}, nil)
+	assert.NoError(t, err)
+	assert.NotNil(t, cmd)
+	assert.NotNil(t, pr)
+	assert.NotNil(t, pw)
+	out, _ := io.ReadAll(pr)
+	assert.Contains(t, string(out), "hello")
 }

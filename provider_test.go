@@ -2,12 +2,16 @@ package applecontainer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/lynicis/applecontainer-go/log"
 )
@@ -680,4 +684,62 @@ func TestHealth(t *testing.T) {
 	if capturedCommands[1][0] != "system" || capturedCommands[1][1] != "status" {
 		t.Errorf("expected second command to be system status, got %v", capturedCommands[1])
 	}
+}
+
+func TestParseImageInspect(t *testing.T) {
+	// 1. Array
+	ii1, err := parseImageInspect([]byte(`[{"id": "sha256:123"}]`))
+	require.NoError(t, err)
+	assert.Equal(t, "sha256:123", ii1.ID)
+
+	// 2. Object
+	ii2, err := parseImageInspect([]byte(`{"id": "sha256:456"}`))
+	require.NoError(t, err)
+	assert.Equal(t, "sha256:456", ii2.ID)
+
+	// 3. Invalid JSON
+	_, err = parseImageInspect([]byte(`invalid`))
+	assert.ErrorContains(t, err, "failed to parse image inspect JSON")
+}
+
+func TestProviderErrorCases(t *testing.T) {
+	runner := &fakeRunner{
+		runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
+			return nil, nil, 1, errors.New("provider error")
+		},
+	}
+	p := &cliProvider{
+		runner: runner,
+		log:    log.TestLogger(t),
+	}
+
+	_, err := p.CreateContainer(context.Background(), &ContainerRequest{})
+	assert.ErrorContains(t, err, "provider error")
+
+	err = p.StartContainer(context.Background(), &cliContainer{id: "123"})
+	assert.ErrorContains(t, err, "provider error")
+
+	_, err = p.InspectContainer(context.Background(), "123")
+	assert.ErrorContains(t, err, "provider error")
+
+	err = p.ImagePull(context.Background(), "img")
+	assert.ErrorContains(t, err, "provider error")
+
+	_, err = p.ImageInspect(context.Background(), "img")
+	assert.ErrorContains(t, err, "provider error")
+}
+
+func TestCopyToContainerErrors(t *testing.T) {
+	p := &cliProvider{runner: &fakeRunner{}}
+	err := p.CopyToContainer(context.Background(), "", "/dest", []byte{}, 0644)
+	assert.ErrorContains(t, err, "cannot copy to empty container ID")
+
+	runner := &fakeRunner{
+		runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
+			return nil, nil, 1, errors.New("cp fail")
+		},
+	}
+	p2 := &cliProvider{runner: runner}
+	err = p2.CopyToContainer(context.Background(), "id", "/dest", []byte{}, 0644)
+	assert.ErrorContains(t, err, "cp fail")
 }

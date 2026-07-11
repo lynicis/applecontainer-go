@@ -404,3 +404,140 @@ func TestWaitOptionsProper(t *testing.T) {
 	assert.Equal(t, dl, sq.PollInterval)
 	assert.Equal(t, "q", sq.Query)
 }
+
+func TestForAllStrategy_Error(t *testing.T) {
+	s1 := CustomizeStrategy(func(ctx context.Context, target StrategyTarget) error {
+		return errors.New("sub-strategy error")
+	})
+
+	composite := ForAll(s1)
+	err := composite.WaitUntilReady(context.Background(), &fakeTarget{})
+	assert.ErrorContains(t, err, "sub-strategy error")
+}
+
+func TestForAnyStrategy_Error(t *testing.T) {
+	s1 := CustomizeStrategy(func(ctx context.Context, target StrategyTarget) error {
+		return errors.New("sub-strategy error")
+	})
+
+	composite := ForAny(s1)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	err := composite.WaitUntilReady(ctx, &fakeTarget{})
+	assert.Error(t, err)
+}
+
+func TestForHTTP_Error(t *testing.T) {
+	strat := ForHTTP("/").WithPort("invalid").WithPollInterval(time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	err := strat.WaitUntilReady(ctx, &fakeTarget{})
+	assert.Error(t, err)
+
+	strat2 := ForHTTP("/").WithPollInterval(time.Millisecond)
+	err2 := strat2.WaitUntilReady(ctx, &fakeTarget{
+		mappedPortFunc: func(ctx context.Context, port string) (int, error) {
+			return 0, errors.New("mapped port error")
+		},
+	})
+	assert.Error(t, err2)
+}
+
+func TestForSQL_Error(t *testing.T) {
+	strat := ForSQL("80", "mockdb", func(h string, p int) string { return "fail" }).WithPollInterval(time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	err := strat.WaitUntilReady(ctx, &fakeTarget{
+		mappedPortFunc: func(ctx context.Context, port string) (int, error) {
+			return 0, errors.New("mapped port error")
+		},
+	})
+	assert.Error(t, err)
+}
+
+func TestForListeningPort_Error(t *testing.T) {
+	strat := ForListeningPort("80").WithPollInterval(time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	err := strat.WaitUntilReady(ctx, &fakeTarget{
+		mappedPortFunc: func(ctx context.Context, port string) (int, error) {
+			return 0, errors.New("mapped port error")
+		},
+	})
+	assert.Error(t, err)
+}
+
+func TestForExec_Error(t *testing.T) {
+	strat := ForExec([]string{"fail"}).WithPollInterval(time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	err := strat.WaitUntilReady(ctx, &fakeTarget{
+		execFunc: func(ctx context.Context, cmd []string, opts ...any) (int, []byte, error) {
+			return 1, nil, errors.New("exec error")
+		},
+	})
+	assert.Error(t, err)
+}
+
+func TestForExit_Error(t *testing.T) {
+	strat := ForExit().WithPollInterval(time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	err := strat.WaitUntilReady(ctx, &fakeTarget{
+		statusFunc: func(ctx context.Context) (string, error) {
+			return "", errors.New("status error")
+		},
+	})
+	assert.NoError(t, err)
+}
+
+func TestForHealth_Error(t *testing.T) {
+	strat := ForHealth().WithPollInterval(time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	err := strat.WaitUntilReady(ctx, &fakeTarget{
+		statusFunc: func(ctx context.Context) (string, error) {
+			return "", errors.New("status error")
+		},
+	})
+	assert.Error(t, err)
+}
+
+func TestForLog_Error(t *testing.T) {
+	strat := ForLog("never").WithPollInterval(time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	err := strat.WaitUntilReady(ctx, &fakeTarget{
+		logsFunc: func(ctx context.Context) (io.ReadCloser, error) {
+			return nil, errors.New("logs error")
+		},
+	})
+	assert.Error(t, err)
+}
+
+func TestForFile_Error(t *testing.T) {
+	strat := ForFile("never").WithPollInterval(time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	err := strat.WaitUntilReady(ctx, &fakeTarget{
+		copyFileFunc: func(ctx context.Context, path string) (io.ReadCloser, error) {
+			return nil, errors.New("file error")
+		},
+	})
+	assert.Error(t, err)
+}
+
+func TestForAllStrategy_Deadline(t *testing.T) {
+	s1 := CustomizeStrategy(func(ctx context.Context, target StrategyTarget) error {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(1 * time.Second):
+			return nil
+		}
+	})
+
+	composite := ForAll(s1).WithDeadline(10 * time.Millisecond)
+	err := composite.WaitUntilReady(context.Background(), &fakeTarget{})
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+}

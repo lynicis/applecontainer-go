@@ -1,13 +1,19 @@
 package applecontainer
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"io"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/lynicis/applecontainer-go/wait"
 )
 
 func TestSessionID_Stability(t *testing.T) {
@@ -151,4 +157,162 @@ func TestApplecontainerOptionsProper(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, gotArgs, 1)
 	assert.Equal(t, "prune", gotArgs[0])
+}
+
+func TestRun_Errors(t *testing.T) {
+	runner := &fakeRunner{
+		runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
+			if len(args) > 0 && args[0] == "--version" {
+				return []byte("container version 1.0.0 (build: release, commit: test)\n"), nil, 0, nil
+			}
+			return nil, nil, 0, nil
+		},
+	}
+	providerRunnerOverride = runner
+	defer func() { providerRunnerOverride = nil }()
+
+	t.Run("CustomizerError", func(t *testing.T) {
+		errCustomizer := func(req *ContainerRequest) error { return errors.New("custom error") }
+		_, err := Run(context.Background(), "nginx", errCustomizer)
+		assert.ErrorContains(t, err, "custom error")
+	})
+
+	t.Run("ValidationError", func(t *testing.T) {
+		_, err := Run(context.Background(), "") // Empty image name triggers validation error
+		assert.Error(t, err)
+	})
+
+	t.Run("CreateContainerError", func(t *testing.T) {
+		failRunner := &fakeRunner{
+			runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
+				if len(args) > 0 {
+					switch args[0] {
+					case "--version":
+						return []byte("container version 1.0.0\n"), nil, 0, nil
+					case "create":
+						return nil, nil, 1, errors.New("create error")
+					}
+				}
+				return nil, nil, 0, nil
+			},
+		}
+		providerRunnerOverride = failRunner
+		_, err := Run(context.Background(), "nginx")
+		assert.ErrorContains(t, err, "create error")
+	})
+	providerRunnerOverride = runner
+}
+
+func TestRun_BuildImage(t *testing.T) {
+	var buildCalled bool
+	var deleteCalled bool
+	runner := &fakeRunner{
+		runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
+			if len(args) > 0 {
+				if args[0] == "--version" {
+					return []byte("container version 1.0.0\n"), nil, 0, nil
+				} else if args[0] == "build" {
+					buildCalled = true
+					return nil, nil, 0, nil
+				} else if args[0] == "image" && args[1] == "delete" {
+					deleteCalled = true
+					return nil, nil, 0, nil
+				} else if args[0] == "create" {
+					for i, arg := range args {
+						if arg == "--cidfile" {
+							_ = os.WriteFile(args[i+1], []byte("fake-run-cid"), 0644)
+							break
+						}
+					}
+				}
+			}
+			return nil, nil, 0, nil
+		},
+	}
+	providerRunnerOverride = runner
+	defer func() { providerRunnerOverride = nil }()
+
+	ctx := context.Background()
+	c, err := Run(ctx, "", func(req *ContainerRequest) error {
+		val := "argVal"
+		req.FromContainerfile = FromContainerfile{
+			Context:   ".",
+			KeepImage: false,
+			File:      "Dockerfile.test",
+			BuildArgs: map[string]*string{"argKey": &val},
+			Target:    "dev",
+			NoCache:   true,
+			Pull:      true,
+			Platform:  "linux/arm64",
+			Secrets:   map[string]string{"mysecret": "/tmp/secret"},
+			// Test empty tags too
+			Tags: nil,
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	assert.True(t, buildCalled)
+	assert.NotEmpty(t, c.image)
+
+	// Trigger cleanup
+	for _, f := range c.req.Cleanups {
+		_ = f(ctx)
+	}
+	assert.True(t, deleteCalled)
+}
+
+type mockWait struct {
+	err error
+}
+
+func (m mockWait) WaitUntilReady(ctx context.Context, target wait.StrategyTarget) error {
+	return m.err
+}
+
+func TestRun_Coverage(t *testing.T) {
+	runner := &fakeRunner{
+		runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
+			if len(args) > 0 && args[0] == "--version" {
+				return []byte("container version 1.0.0\n"), nil, 0, nil
+			}
+			if len(args) > 0 && args[0] == "create" {
+				for i, arg := range args {
+					if arg == "--cidfile" {
+						_ = os.WriteFile(args[i+1], []byte("fake-run-cid"), 0644)
+						break
+					}
+				}
+			}
+			return nil, nil, 0, nil
+		},
+		startFn: func(ctx context.Context, args []string, stdin io.Reader) (*exec.Cmd, io.Reader, io.Reader, error) {
+			return nil, strings.NewReader("log data"), strings.NewReader(""), nil
+		},
+	}
+	providerRunnerOverride = runner
+	defer func() { providerRunnerOverride = nil }()
+
+	// Wait error
+	_, err := Run(context.Background(), "nginx", WithWaitStrategy(mockWait{err: errors.New("wait failed")}))
+	assert.ErrorContains(t, err, "wait failed")
+
+	// Missing copy file
+	_, err = Run(context.Background(), "nginx", WithFiles(ContainerFile{HostFilePath: "/does/not/exist"}))
+	assert.ErrorContains(t, err, "failed to read host file")
+
+	// Version check error
+	badRunner := &fakeRunner{
+		runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
+			return nil, nil, 1, errors.New("exec error")
+		},
+	}
+	providerRunnerOverride = badRunner
+	_, err = Run(context.Background(), "nginx")
+	assert.ErrorContains(t, err, "exec error")
+	providerRunnerOverride = runner
+
+	// LogWriters
+	buf := new(bytes.Buffer)
+	_, err = Run(context.Background(), "nginx", WithLogWriters(buf))
+	assert.NoError(t, err)
 }

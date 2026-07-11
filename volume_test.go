@@ -48,3 +48,22 @@ func TestNewVolume(t *testing.T) {
 		t.Errorf("unexpected delete args: %v", capturedArgs)
 	}
 }
+
+func TestNewVolumeEmptyName(t *testing.T) {
+	runner := &fakeRunner{
+		runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
+			return nil, nil, 0, nil
+		},
+	}
+	providerRunnerOverride = runner
+	defer func() { providerRunnerOverride = nil }()
+
+	vol, err := NewVolume(context.Background(), VolumeRequest{})
+	if err != nil {
+		t.Fatalf("failed to create volume: %v", err)
+	}
+
+	if vol.Name() == "" {
+		t.Errorf("expected volume name to be generated, got empty")
+	}
+}

@@ -481,3 +481,44 @@ func TestContainerDelegationProper(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, cf)
 }
+
+func TestContainer_CopyFileToContainer_Error(t *testing.T) {
+	runner := &fakeRunner{
+		runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
+			return nil, nil, 0, nil
+		},
+	}
+	p := &cliProvider{
+		runner: runner,
+		log:    log.TestLogger(t),
+	}
+	c := &cliContainer{
+		provider: p,
+		id:       "cov-id",
+	}
+
+	err := c.CopyFileToContainer(context.Background(), "/does/not/exist", "/tmp/hello", 0644)
+	assert.ErrorContains(t, err, "failed to read host file")
+}
+
+func TestContainerTerminate_LogCancel_And_StopError(t *testing.T) {
+	runner := &fakeRunner{
+		runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
+			if len(args) > 0 && args[0] == "stop" {
+				return nil, nil, 1, errors.New("stop failed")
+			}
+			return nil, nil, 0, nil
+		},
+	}
+	p := &cliProvider{
+		runner: runner,
+		log:    log.TestLogger(t),
+	}
+	c := &cliContainer{
+		provider:  p,
+		id:        "cov-id",
+		logCancel: func() {},
+	}
+	err := c.Terminate(context.Background())
+	assert.NoError(t, err) // Terminate ignores stop errors
+}

@@ -103,3 +103,59 @@ func TestVersionCheckMissingBinaryHelpful(t *testing.T) {
 		t.Fatalf("error should be helpful and mention container: %v", err)
 	}
 }
+
+func TestApplyPropertiesAll(t *testing.T) {
+	c := Config{}
+	content := `
+# comment
+container.binary.path=/bin/custom
+container.default.network=custom-net
+container.default.platform=linux/amd64
+hub.image.name.prefix=test/
+container.pull.timeout=10s
+container.debug=yes
+unknown=key
+`
+	applyProperties(&c, content)
+	if c.BinaryPath != "/bin/custom" {
+		t.Errorf("BinaryPath = %q", c.BinaryPath)
+	}
+	if c.DefaultNetwork != "custom-net" {
+		t.Errorf("DefaultNetwork = %q", c.DefaultNetwork)
+	}
+	if c.DefaultPlatform != "linux/amd64" {
+		t.Errorf("DefaultPlatform = %q", c.DefaultPlatform)
+	}
+	if c.HubImagePrefix != "test/" {
+		t.Errorf("HubImagePrefix = %q", c.HubImagePrefix)
+	}
+	if c.PullTimeout.String() != "10s" {
+		t.Errorf("PullTimeout = %q", c.PullTimeout)
+	}
+	if c.Debug != true {
+		t.Errorf("Debug = %v", c.Debug)
+	}
+}
+
+func TestParseBoolAll(t *testing.T) {
+	tests := []struct {
+		in  string
+		out bool
+	}{
+		{"true", true},
+		{"1", true},
+		{"yes", true},
+		{"on", true},
+		{"false", false},
+		{"0", false},
+		{"off", false},
+		{"no", false},
+		{"", false},
+		{"  YES  ", true},
+	}
+	for _, tc := range tests {
+		if got := parseBool(tc.in); got != tc.out {
+			t.Errorf("parseBool(%q) = %v; want %v", tc.in, got, tc.out)
+		}
+	}
+}

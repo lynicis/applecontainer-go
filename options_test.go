@@ -177,3 +177,33 @@ func TestOptionsProper(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, req.WaitingFor)
 }
+
+func TestWithAdditionalWaitStrategy(t *testing.T) {
+	s1 := &dummyStrategy{name: "s1"}
+	s2 := &dummyStrategy{name: "s2"}
+	s3 := &dummyStrategy{name: "s3"}
+
+	req := &ContainerRequest{}
+
+	// Case 1: req.WaitingFor == nil
+	err := WithAdditionalWaitStrategy(s1)(req)
+	require.NoError(t, err)
+	composite, ok := req.WaitingFor.(*wait.ForAllStrategy)
+	require.True(t, ok)
+	assert.Len(t, composite.Strategies, 1)
+
+	// Case 2: req.WaitingFor is already ForAllStrategy
+	err = WithAdditionalWaitStrategy(s2)(req)
+	require.NoError(t, err)
+	composite2, ok := req.WaitingFor.(*wait.ForAllStrategy)
+	require.True(t, ok)
+	assert.Len(t, composite2.Strategies, 2)
+
+	// Case 3: req.WaitingFor is NOT ForAllStrategy
+	req.WaitingFor = s3
+	err = WithAdditionalWaitStrategy(s1)(req)
+	require.NoError(t, err)
+	composite3, ok := req.WaitingFor.(*wait.ForAllStrategy)
+	require.True(t, ok)
+	assert.Len(t, composite3.Strategies, 2)
+}

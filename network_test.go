@@ -72,3 +72,23 @@ func TestNetworkOptionsProper(t *testing.T) {
 	require.Len(t, req.NetworkAliases["fake"], 1)
 	assert.Equal(t, "alias", req.NetworkAliases["fake"][0])
 }
+
+func TestWithNewNetwork(t *testing.T) {
+	runner := &fakeRunner{
+		runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
+			return nil, nil, 0, nil
+		},
+	}
+	providerRunnerOverride = runner
+	defer func() { providerRunnerOverride = nil }()
+
+	req := &ContainerRequest{}
+	customizer := WithNewNetwork(context.Background(), []string{"alias1"}, NetworkRequest{Name: "test-new-nw"})
+	err := customizer(req)
+	require.NoError(t, err)
+
+	require.Len(t, req.Networks, 1)
+	assert.Equal(t, "test-new-nw", req.Networks[0])
+	require.Len(t, req.NetworkAliases["test-new-nw"], 1)
+	assert.Equal(t, "alias1", req.NetworkAliases["test-new-nw"][0])
+}
