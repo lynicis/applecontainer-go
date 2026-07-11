@@ -237,26 +237,26 @@ cd benchmarks && APPLECONTAINER_BENCHMARK=1 go test -bench=. -benchmem -benchtim
 
 | Operation | `applecontainer-go` | `testcontainers-go` | Winner |
 | :--- | ---: | ---: | :---: |
-| Stop | 242ms | 248ms | **🍎 Apple** |
-| Start (restart) | 69ms | 249ms | **🍎 Apple** (3.6x faster) |
-| Terminate | 265ms | 257ms | **🐳 Docker** |
-| Inspect | 273ms | 232ms | **🐳 Docker** (1.2x faster) |
-| Exec (`echo hello`) | 290ms | 391ms | **🍎 Apple** (1.3x faster) |
-| Copy To (1 KB) | 270ms | 247ms | **🐳 Docker** |
-| Copy To (1 MB) | 261ms | 281ms | **🍎 Apple** |
-| Copy From (1 KB) | 260ms | 258ms | **🐳 Docker** |
-| Copy From (1 MB) | 318ms | 290ms | **🐳 Docker** |
-| Logs (10k lines) | 5.54s | 10.23s | **🍎 Apple** (1.8x faster) |
-| Wait: HTTP | 621ms | 634ms | **🍎 Apple** |
-| Wait: SQL (pgx) | 1.73s | 767ms | **🐳 Docker** (2.3x faster) |
-| Wait: Exec | 737ms | 656ms | **🐳 Docker** |
-| Wait: Health | 805ms | 340ms | **🐳 Docker** (2.4x faster) |
-| Wait: Composite | 733ms | 397ms | **🐳 Docker** (1.8x faster) |
-| Wait: Log (spam) | 611ms | 203ms | **🐳 Docker** (3.0x faster) |
-| Parallel startup (2) | 1.53s | 595ms | **🐳 Docker** (2.6x faster) |
-| Parallel startup (4) | 3.14s | 1.03s | **🐳 Docker** (3.0x faster) |
-| Parallel startup (8) | 6.24s | 1.81s | **🐳 Docker** (3.4x faster) |
-| TCP Latency (Redis) | 3.34s | 380ms | **🐳 Docker** (8.8x faster) |
+| Stop | 277ms | 201ms | **🐳 Docker** (1.3x faster) |
+| Start (restart) | 70ms | 245ms | **🍎 Apple** (3.5x faster) |
+| Terminate | 274ms | 214ms | **🐳 Docker** (1.2x faster) |
+| Inspect | 298ms | 210ms | **🐳 Docker** (1.4x faster) |
+| Exec (`echo hello`) | 346ms | 341ms | **🐳 Docker** |
+| Copy To (1 KB) | 286ms | 221ms | **🐳 Docker** (1.2x faster) |
+| Copy To (1 MB) | 292ms | 217ms | **🐳 Docker** (1.3x faster) |
+| Copy From (1 KB) | 302ms | 193ms | **🐳 Docker** (1.5x faster) |
+| Copy From (1 MB) | 317ms | 212ms | **🐳 Docker** (1.4x faster) |
+| Logs (10k lines) | 5.41s | 10.22s | **🍎 Apple** (1.8x faster) |
+| Wait: HTTP | 11.18s | 968ms | **🐳 Docker** (11.5x faster) |
+| Wait: SQL (pgx) | 1.74s | 1.51s | **🐳 Docker** (1.1x faster) |
+| Wait: Exec | 754ms | 697ms | **🐳 Docker** |
+| Wait: Health | 701ms | 777ms | **🍎 Apple** (1.1x faster) |
+| Wait: Composite | 733ms | 778ms | **🍎 Apple** |
+| Wait: Log (spam) | 603ms | 807ms | **🍎 Apple** (1.3x faster) |
+| Parallel startup (2) | 1.04s | 299ms | **🐳 Docker** (3.4x faster) |
+| Parallel startup (4) | 1.99s | 357ms | **🐳 Docker** (5.5x faster) |
+| Parallel startup (8) | 4.36s | 471ms | **🐳 Docker** (9.2x faster) |
+| TCP Latency (Redis) | 301ms | 306ms | **🍎 Apple** |
 
 *(Specs: Go 1.24 · darwin/arm64 · Apple M5)*
 

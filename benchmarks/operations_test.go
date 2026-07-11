@@ -35,7 +35,7 @@ func BenchmarkStop(b *testing.B) {
 				b.StartTimer()
 				_ = c.Stop(ctx, &stopTimeout)
 				b.StopTimer()
-				c.Terminate(ctx)
+				_ = c.Terminate(ctx)
 			}
 		case TestcontainersGo:
 			for i := 0; i < b.N; i++ {
@@ -55,7 +55,7 @@ func BenchmarkStop(b *testing.B) {
 				b.StartTimer()
 				_ = c.Stop(ctx, &stopTimeout)
 				b.StopTimer()
-				c.Terminate(ctx)
+				_ = c.Terminate(ctx)
 			}
 		}
 	})
@@ -82,7 +82,7 @@ func BenchmarkStart(b *testing.B) {
 				b.StartTimer()
 				_ = c.Start(ctx)
 				b.StopTimer()
-				c.Terminate(ctx)
+				_ = c.Terminate(ctx)
 			}
 		case TestcontainersGo:
 			for i := 0; i < b.N; i++ {
@@ -103,7 +103,7 @@ func BenchmarkStart(b *testing.B) {
 				b.StartTimer()
 				_ = c.Start(ctx)
 				b.StopTimer()
-				c.Terminate(ctx)
+				_ = c.Terminate(ctx)
 			}
 		}
 	})
@@ -126,7 +126,7 @@ func BenchmarkTerminate(b *testing.B) {
 					b.Fatal(err)
 				}
 				b.StartTimer()
-				c.Terminate(ctx)
+				_ = c.Terminate(ctx)
 			}
 		case TestcontainersGo:
 			for i := 0; i < b.N; i++ {
@@ -144,7 +144,7 @@ func BenchmarkTerminate(b *testing.B) {
 					b.Fatal(err)
 				}
 				b.StartTimer()
-				c.Terminate(ctx)
+				_ = c.Terminate(ctx)
 			}
 		}
 	})
@@ -165,7 +165,7 @@ func BenchmarkInspect(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
-			defer c.Terminate(ctx)
+			defer func() { _ = c.Terminate(ctx) }()
 			b.StartTimer()
 
 			for i := 0; i < b.N; i++ {
@@ -185,7 +185,7 @@ func BenchmarkInspect(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
-			defer c.Terminate(ctx)
+			defer func() { _ = c.Terminate(ctx) }()
 			b.StartTimer()
 
 			for i := 0; i < b.N; i++ {
@@ -210,7 +210,7 @@ func BenchmarkExec(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
-			defer c.Terminate(ctx)
+			defer func() { _ = c.Terminate(ctx) }()
 			b.StartTimer()
 
 			for i := 0; i < b.N; i++ {
@@ -230,7 +230,7 @@ func BenchmarkExec(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
-			defer c.Terminate(ctx)
+			defer func() { _ = c.Terminate(ctx) }()
 			b.StartTimer()
 
 			for i := 0; i < b.N; i++ {
@@ -270,7 +270,7 @@ func BenchmarkCopyFile1KB(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
-			defer c.Terminate(ctx)
+			defer func() { _ = c.Terminate(ctx) }()
 			b.StartTimer()
 
 			for i := 0; i < b.N; i++ {
@@ -290,7 +290,7 @@ func BenchmarkCopyFile1KB(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
-			defer c.Terminate(ctx)
+			defer func() { _ = c.Terminate(ctx) }()
 			b.StartTimer()
 
 			for i := 0; i < b.N; i++ {
@@ -325,7 +325,7 @@ func BenchmarkCopyFile1MB(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
-			defer c.Terminate(ctx)
+			defer func() { _ = c.Terminate(ctx) }()
 			b.StartTimer()
 
 			for i := 0; i < b.N; i++ {
@@ -345,7 +345,7 @@ func BenchmarkCopyFile1MB(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
-			defer c.Terminate(ctx)
+			defer func() { _ = c.Terminate(ctx) }()
 			b.StartTimer()
 
 			for i := 0; i < b.N; i++ {
@@ -375,7 +375,7 @@ func BenchmarkCopyFileFromContainer1KB(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
-			defer c.Terminate(ctx)
+			defer func() { _ = c.Terminate(ctx) }()
 
 			if err := c.CopyToContainer(ctx, data, "/tmp/payload", 0o644); err != nil {
 				b.Fatal(err)
@@ -405,7 +405,7 @@ func BenchmarkCopyFileFromContainer1KB(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
-			defer c.Terminate(ctx)
+			defer func() { _ = c.Terminate(ctx) }()
 
 			if err := c.CopyToContainer(ctx, data, "/tmp/payload", 0o644); err != nil {
 				b.Fatal(err)
@@ -445,7 +445,7 @@ func BenchmarkCopyFileFromContainer1MB(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
-			defer c.Terminate(ctx)
+			defer func() { _ = c.Terminate(ctx) }()
 
 			if err := c.CopyToContainer(ctx, data, "/tmp/payload", 0o644); err != nil {
 				b.Fatal(err)
@@ -475,7 +475,7 @@ func BenchmarkCopyFileFromContainer1MB(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
-			defer c.Terminate(ctx)
+			defer func() { _ = c.Terminate(ctx) }()
 
 			if err := c.CopyToContainer(ctx, data, "/tmp/payload", 0o644); err != nil {
 				b.Fatal(err)
@@ -512,7 +512,7 @@ func BenchmarkLogs(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
-			defer c.Terminate(ctx)
+			defer func() { _ = c.Terminate(ctx) }()
 			b.StartTimer()
 
 			for i := 0; i < b.N; i++ {
@@ -537,7 +537,7 @@ func BenchmarkLogs(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
-			defer c.Terminate(ctx)
+			defer func() { _ = c.Terminate(ctx) }()
 			b.StartTimer()
 
 			for i := 0; i < b.N; i++ {
@@ -573,7 +573,7 @@ func BenchmarkWaitStrategyLog(b *testing.B) {
 					b.Fatal(err)
 				}
 				b.StopTimer()
-				c.Terminate(ctx)
+				_ = c.Terminate(ctx)
 			}
 		case TestcontainersGo:
 			for i := 0; i < b.N; i++ {
@@ -592,7 +592,7 @@ func BenchmarkWaitStrategyLog(b *testing.B) {
 					b.Fatal(err)
 				}
 				b.StopTimer()
-				c.Terminate(ctx)
+				_ = c.Terminate(ctx)
 			}
 		}
 	})

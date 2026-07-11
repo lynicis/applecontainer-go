@@ -25,6 +25,7 @@ func BenchmarkHTTPThroughput(b *testing.B) {
 	// Apple container networking doesn't support inbound HTTP from host.
 	// Only benchmark testcontainers-go for HTTP throughput.
 	b.Run("TestcontainersGo", func(b *testing.B) {
+		b.ReportAllocs()
 		SkipIfDockerNotHealthy(b)
 		ctx := context.Background()
 		img := "nginx:alpine"
@@ -43,7 +44,7 @@ func BenchmarkHTTPThroughput(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		defer c.Terminate(ctx)
+		defer func() { _ = c.Terminate(ctx) }()
 		host, _ := c.Host(ctx)
 		port, _ := c.MappedPort(ctx, "80")
 		endpoint := fmt.Sprintf("http://%s:%s", host, port.Port())
@@ -55,8 +56,8 @@ func BenchmarkHTTPThroughput(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
-			io.Copy(io.Discard, resp.Body)
-			resp.Body.Close()
+			_, _ = io.Copy(io.Discard, resp.Body)
+			_ = resp.Body.Close()
 		}
 	})
 }
@@ -76,7 +77,7 @@ func BenchmarkTCPLatency(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
-			defer c.Terminate(ctx)
+			defer func() { _ = c.Terminate(ctx) }()
 			b.StartTimer()
 
 			for i := 0; i < b.N; i++ {
@@ -101,7 +102,7 @@ func BenchmarkTCPLatency(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
-			defer c.Terminate(ctx)
+			defer func() { _ = c.Terminate(ctx) }()
 			b.StartTimer()
 
 			for i := 0; i < b.N; i++ {

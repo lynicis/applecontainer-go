@@ -16,8 +16,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// ponytail: YAGNI - using testcontainers here to avoid reinventing the wheel
-// just setting up a dummy DB for the driver benchmarks.
 type BenchModel struct {
 	ID  int `gorm:"primaryKey"`
 	Val string
@@ -53,7 +51,7 @@ func setupDB(t testing.TB) (string, func()) {
 	if err != nil {
 		t.Fatalf("failed to open pq: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	_, err = db.Exec("CREATE TABLE bench_models (id SERIAL PRIMARY KEY, val TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %v", err)
@@ -84,7 +82,7 @@ func BenchmarkDrivers(b *testing.B) {
 	if err != nil {
 		b.Fatalf("sql.Open pq failed: %v", err)
 	}
-	defer pqDB.Close()
+	defer func() { _ = pqDB.Close() }()
 
 	// 3. gorm setup
 	gormDB, err := gorm.Open(gormpg.Open(connStr), &gorm.Config{})
@@ -125,7 +123,6 @@ func BenchmarkDrivers(b *testing.B) {
 	})
 
 	// Bulk insert (100 rows)
-	// ponytail: raw multi-value INSERT for pgx/pq, CreateInBatches for gorm
 	b.Run("pgx-bulk-insert-100", func(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -218,7 +215,7 @@ func BenchmarkDrivers(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			rows, _ := pqDB.Query("SELECT id, val FROM bench_models WHERE val LIKE $1 LIMIT 50", "val-%")
 			if rows != nil {
-				rows.Close()
+				_ = rows.Close()
 			}
 		}
 	})

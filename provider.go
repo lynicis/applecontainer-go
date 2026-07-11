@@ -375,13 +375,21 @@ func (p *cliProvider) ImageInspect(ctx context.Context, ref string) (*ImageInspe
 }
 
 func parseImageInspect(data []byte) (*ImageInspect, error) {
-	var arr []ImageInspect
-	if err := json.Unmarshal(data, &arr); err == nil && len(arr) > 0 {
-		return &arr[0], nil
+	data = bytes.TrimSpace(data)
+	if len(data) == 0 {
+		return nil, fmt.Errorf("applecontainer: failed to parse image inspect JSON: empty data")
 	}
-	var obj ImageInspect
-	if err := json.Unmarshal(data, &obj); err == nil {
-		return &obj, nil
+
+	if data[0] == '[' {
+		var arr []ImageInspect
+		if err := json.Unmarshal(data, &arr); err == nil && len(arr) > 0 {
+			return &arr[0], nil
+		}
+	} else {
+		var obj ImageInspect
+		if err := json.Unmarshal(data, &obj); err == nil {
+			return &obj, nil
+		}
 	}
 	return nil, fmt.Errorf("applecontainer: failed to parse image inspect JSON")
 }

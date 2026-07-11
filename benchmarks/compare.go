@@ -25,10 +25,12 @@ func RunWithBoth(b *testing.B, fn func(b *testing.B, rt Runtime)) {
 	}
 
 	b.Run("applecontainer", func(b *testing.B) {
+		b.ReportAllocs()
 		SkipIfProviderNotHealthy(b)
 		fn(b, AppleContainer)
 	})
 	b.Run("testcontainers-go", func(b *testing.B) {
+		b.ReportAllocs()
 		SkipIfDockerNotHealthy(b)
 		fn(b, TestcontainersGo)
 	})
@@ -74,6 +76,7 @@ func prePull(t testing.TB, rt Runtime, img string) {
 // runCmd executes a command and returns combined output.
 func runCmd(t testing.TB, name string, args ...string) (string, error) {
 	t.Helper()
+	/* #nosec G204 */
 	cmd := exec.Command(name, args...)
 	out, err := cmd.CombinedOutput()
 	return strings.TrimSpace(string(out)), err

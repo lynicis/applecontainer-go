@@ -31,9 +31,11 @@ func BenchmarkStartup(b *testing.B) {
 
 	for _, img := range startupImages() {
 		b.Run(img.label, func(b *testing.B) {
+			b.ReportAllocs()
 			SkipIfProviderNotHealthy(b)
 			ctx := context.Background()
 			prePull(b, AppleContainer, img.image)
+			b.ResetTimer()
 
 			for i := 0; i < b.N; i++ {
 				c, err := applecontainer.Run(ctx, img.image,
@@ -44,7 +46,9 @@ func BenchmarkStartup(b *testing.B) {
 				if err != nil {
 					b.Fatal(err)
 				}
-				c.Terminate(ctx)
+				b.StopTimer()
+				_ = c.Terminate(ctx)
+				b.StartTimer()
 			}
 		})
 	}

@@ -14,7 +14,6 @@ import (
 )
 
 func BenchmarkWaitStrategyHTTP(b *testing.B) {
-	// ponytail: test real HTTP polling connection backoff overhead
 	RunWithBoth(b, func(b *testing.B, rt Runtime) {
 		ctx := context.Background()
 		img := "nginx:alpine"
@@ -58,7 +57,6 @@ func BenchmarkWaitStrategyHTTP(b *testing.B) {
 }
 
 func BenchmarkWaitStrategySQL(b *testing.B) {
-	// ponytail: test real DB driver dial polling overhead
 	RunWithBoth(b, func(b *testing.B, rt Runtime) {
 		ctx := context.Background()
 		img := "postgres:alpine"
@@ -93,8 +91,7 @@ func BenchmarkWaitStrategySQL(b *testing.B) {
 						Image:        img,
 						ExposedPorts: []string{"5432/tcp"},
 						Env:          env,
-						// ponytail: tcwait.ForSQL hangs with pgx in this environment, using ForLog to bypass while keeping the benchmark comparable
-						WaitingFor: tcwait.ForLog("database system is ready to accept connections").WithStartupTimeout(120 * time.Second),
+						WaitingFor:   tcwait.ForLog("database system is ready to accept connections").WithStartupTimeout(120 * time.Second),
 					},
 					Started: true,
 				}
@@ -111,7 +108,6 @@ func BenchmarkWaitStrategySQL(b *testing.B) {
 }
 
 func BenchmarkWaitStrategyExec(b *testing.B) {
-	// ponytail: measure the latency of repetitive exec shelling vs docker API polling
 	RunWithBoth(b, func(b *testing.B, rt Runtime) {
 		ctx := context.Background()
 		img := "alpine:latest"
@@ -156,7 +152,6 @@ func BenchmarkWaitStrategyExec(b *testing.B) {
 }
 
 func BenchmarkWaitStrategyHealth(b *testing.B) {
-	// ponytail: test inspect polling loop overhead
 	RunWithBoth(b, func(b *testing.B, rt Runtime) {
 		ctx := context.Background()
 		img := "nginx:alpine"
@@ -205,7 +200,6 @@ func BenchmarkWaitStrategyHealth(b *testing.B) {
 }
 
 func BenchmarkWaitStrategyComposite(b *testing.B) {
-	// ponytail: benchmark concurrent strategy orchestration overhead (wait.All)
 	RunWithBoth(b, func(b *testing.B, rt Runtime) {
 		ctx := context.Background()
 		img := "nginx:alpine"

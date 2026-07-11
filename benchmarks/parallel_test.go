@@ -44,7 +44,7 @@ func BenchmarkParallel(b *testing.B) {
 									return
 								}
 								mu.Lock()
-								cleanups = append(cleanups, func() { c.Terminate(ctx) })
+								cleanups = append(cleanups, func() { _ = c.Terminate(ctx) })
 								mu.Unlock()
 							case TestcontainersGo:
 								req := tccontainer.GenericContainerRequest{
@@ -61,16 +61,18 @@ func BenchmarkParallel(b *testing.B) {
 									return
 								}
 								mu.Lock()
-								cleanups = append(cleanups, func() { c.Terminate(ctx) })
+								cleanups = append(cleanups, func() { _ = c.Terminate(ctx) })
 								mu.Unlock()
 							}
 						}()
 					}
 					wg.Wait()
+					b.StopTimer()
 					for _, fn := range cleanups {
 						fn()
 					}
 					cancel()
+					b.StartTimer()
 				}
 			})
 		})

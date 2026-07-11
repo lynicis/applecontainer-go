@@ -11,9 +11,6 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-// ponytail: single file for all modules, testing end-to-end start+ready+teardown 
-// with custom metrics for the sub-phases.
-
 func BenchmarkTestcontainers(b *testing.B) {
 	ctx := context.Background()
 
@@ -32,7 +29,7 @@ func BenchmarkTestcontainers(b *testing.B) {
 				),
 			)
 			tReady := time.Now()
-			
+
 			if pgContainer != nil {
 				_ = pgContainer.Terminate(ctx)
 			}
@@ -49,7 +46,7 @@ func BenchmarkTestcontainers(b *testing.B) {
 			t0 := time.Now()
 			redisContainer, _ := redis.Run(ctx, "redis:alpine")
 			tReady := time.Now()
-			
+
 			if redisContainer != nil {
 				_ = redisContainer.Terminate(ctx)
 			}
@@ -74,7 +71,7 @@ func BenchmarkTestcontainers(b *testing.B) {
 				Started:          true,
 			})
 			tReady := time.Now()
-			
+
 			if nginxContainer != nil {
 				_ = nginxContainer.Terminate(ctx)
 			}

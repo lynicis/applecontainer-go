@@ -22,13 +22,14 @@ func BenchmarkImagePull(b *testing.B) {
 	}
 
 	b.Run("testcontainers-go", func(b *testing.B) {
+		b.ReportAllocs()
 		SkipIfDockerNotHealthy(b)
 		img := "postgres:alpine"
 		ctx := context.Background()
 		prePull(b, TestcontainersGo, img)
+		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			b.StopTimer()
 			req := tccontainer.GenericContainerRequest{
 				ContainerRequest: tccontainer.ContainerRequest{
 					Image:        img,
@@ -45,19 +46,21 @@ func BenchmarkImagePull(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
+			b.StopTimer()
+			_ = c.Terminate(ctx)
 			b.StartTimer()
-			c.Terminate(ctx)
 		}
 	})
 
 	b.Run("applecontainer", func(b *testing.B) {
+		b.ReportAllocs()
 		SkipIfProviderNotHealthy(b)
 		img := "postgres:alpine"
 		ctx := context.Background()
 		prePull(b, AppleContainer, img)
+		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			b.StopTimer()
 			c, err := applecontainer.Run(ctx, img,
 				applecontainer.WithExposedPorts("5432"),
 				applecontainer.WithEnv(map[string]string{"POSTGRES_PASSWORD": "test"}),
@@ -69,8 +72,9 @@ func BenchmarkImagePull(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
+			b.StopTimer()
+			_ = c.Terminate(ctx)
 			b.StartTimer()
-			c.Terminate(ctx)
 		}
 	})
 }
@@ -81,10 +85,11 @@ func BenchmarkImageBuild(b *testing.B) {
 	}
 
 	b.Run("testcontainers-go", func(b *testing.B) {
+		b.ReportAllocs()
 		SkipIfDockerNotHealthy(b)
 		ctx := context.Background()
+		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			b.StopTimer()
 			req := tccontainer.GenericContainerRequest{
 				ContainerRequest: tccontainer.ContainerRequest{
 					FromDockerfile: tccontainer.FromDockerfile{
@@ -101,8 +106,9 @@ func BenchmarkImageBuild(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
+			b.StopTimer()
+			_ = c.Terminate(ctx)
 			b.StartTimer()
-			c.Terminate(ctx)
 		}
 	})
 }
