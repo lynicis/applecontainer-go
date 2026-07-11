@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -187,6 +188,11 @@ type cliContainer struct {
 	log       *slog.Logger
 	isRunning atomic.Bool
 	logCancel context.CancelFunc
+
+	waitTargetMu          sync.Mutex
+	waitTargetHost        string
+	waitTargetHostCached  bool
+	waitTargetMappedPorts map[string]int
 }
 
 var _ Container = (*cliContainer)(nil)
@@ -368,7 +374,21 @@ func (c *cliContainer) CopyToContainer(ctx context.Context, content []byte, cont
 
 // CopyFileToContainer copies a host file to a path inside the container.
 func (c *cliContainer) CopyFileToContainer(ctx context.Context, hostPath, containerPath string, mode int64) error {
-	content, err := os.ReadFile(filepath.Clean(hostPath))
+	fileMode, err := checkedFileMode(mode)
+	if err != nil {
+		return err
+	}
+
+	cleanHostPath := filepath.Clean(hostPath)
+	info, err := os.Stat(cleanHostPath)
+	if err != nil {
+		return fmt.Errorf("applecontainer: copy file to container: failed to read host file: %w", err)
+	}
+	if info.Mode().IsRegular() && info.Mode().Perm() == fileMode.Perm() {
+		return c.provider.copyHostFileToContainer(ctx, c.id, cleanHostPath, containerPath)
+	}
+
+	content, err := os.ReadFile(cleanHostPath)
 	if err != nil {
 		return fmt.Errorf("applecontainer: copy file to container: failed to read host file: %w", err)
 	}
@@ -382,6 +402,66 @@ func (c *cliContainer) CopyFileFromContainer(ctx context.Context, path string) (
 
 type waitTarget struct {
 	*cliContainer
+}
+
+func normalizeWaitTargetPortKey(port string) string {
+	pNum, proto := wait.ParsePort(port)
+	if pNum <= 0 {
+		return port
+	}
+	return fmt.Sprintf("%d/%s", pNum, proto)
+}
+
+func (w waitTarget) Host(ctx context.Context) (string, error) {
+	w.waitTargetMu.Lock()
+	if w.waitTargetHostCached {
+		host := w.waitTargetHost
+		w.waitTargetMu.Unlock()
+		return host, nil
+	}
+	w.waitTargetMu.Unlock()
+
+	host, err := w.cliContainer.Host(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	w.waitTargetMu.Lock()
+	if !w.waitTargetHostCached {
+		w.waitTargetHost = host
+		w.waitTargetHostCached = true
+	}
+	host = w.waitTargetHost
+	w.waitTargetMu.Unlock()
+	return host, nil
+}
+
+func (w waitTarget) MappedPort(ctx context.Context, port string) (int, error) {
+	key := normalizeWaitTargetPortKey(port)
+
+	w.waitTargetMu.Lock()
+	if mapped, ok := w.waitTargetMappedPorts[key]; ok {
+		w.waitTargetMu.Unlock()
+		return mapped, nil
+	}
+	w.waitTargetMu.Unlock()
+
+	mapped, err := w.cliContainer.MappedPort(ctx, port)
+	if err != nil {
+		return 0, err
+	}
+
+	w.waitTargetMu.Lock()
+	if w.waitTargetMappedPorts == nil {
+		w.waitTargetMappedPorts = make(map[string]int)
+	}
+	if cached, ok := w.waitTargetMappedPorts[key]; ok {
+		w.waitTargetMu.Unlock()
+		return cached, nil
+	}
+	w.waitTargetMappedPorts[key] = mapped
+	w.waitTargetMu.Unlock()
+	return mapped, nil
 }
 
 func (w waitTarget) Exec(ctx context.Context, cmd []string, opts ...any) (int, []byte, error) {

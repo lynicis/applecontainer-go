@@ -44,27 +44,34 @@ func ForExec(cmd []string) *ExecStrategy {
 
 // WaitUntilReady executes the command repeatedly until the exit code and output match, or times out.
 func (s *ExecStrategy) WaitUntilReady(ctx context.Context, target StrategyTarget) error {
+	checkReady := func() bool {
+		code, out, err := target.Exec(ctx, s.Cmd)
+		if err != nil {
+			return false
+		}
+
+		ok := s.ExitCodeMatcher(code)
+		if ok && s.ResponseMatcher != nil {
+			ok = s.ResponseMatcher(bytes.NewReader(out))
+		}
+		return ok
+	}
+
 	ticker := time.NewTicker(s.PollInterval)
 	defer ticker.Stop()
 
 	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if checkReady() {
+			return nil
+		}
+
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			code, out, err := target.Exec(ctx, s.Cmd)
-			if err != nil {
-				continue
-			}
-
-			ok := s.ExitCodeMatcher(code)
-			if ok && s.ResponseMatcher != nil {
-				ok = s.ResponseMatcher(bytes.NewReader(out))
-			}
-
-			if ok {
-				return nil
-			}
 		}
 	}
 }

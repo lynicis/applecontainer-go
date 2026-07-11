@@ -237,30 +237,41 @@ cd benchmarks && APPLECONTAINER_BENCHMARK=1 go test -bench=. -benchmem -benchtim
 
 | Operation | `applecontainer-go` | `testcontainers-go` | Winner |
 | :--- | ---: | ---: | :---: |
-| Stop | 277ms | 201ms | **🐳 Docker** (1.3x faster) |
-| Start (restart) | 70ms | 245ms | **🍎 Apple** (3.5x faster) |
-| Terminate | 274ms | 214ms | **🐳 Docker** (1.2x faster) |
-| Inspect | 298ms | 210ms | **🐳 Docker** (1.4x faster) |
-| Exec (`echo hello`) | 346ms | 341ms | **🐳 Docker** |
-| Copy To (1 KB) | 286ms | 221ms | **🐳 Docker** (1.2x faster) |
-| Copy To (1 MB) | 292ms | 217ms | **🐳 Docker** (1.3x faster) |
-| Copy From (1 KB) | 302ms | 193ms | **🐳 Docker** (1.5x faster) |
-| Copy From (1 MB) | 317ms | 212ms | **🐳 Docker** (1.4x faster) |
-| Logs (10k lines) | 5.41s | 10.22s | **🍎 Apple** (1.8x faster) |
-| Wait: HTTP | 11.18s | 968ms | **🐳 Docker** (11.5x faster) |
-| Wait: SQL (pgx) | 1.74s | 1.51s | **🐳 Docker** (1.1x faster) |
-| Wait: Exec | 754ms | 697ms | **🐳 Docker** |
-| Wait: Health | 701ms | 777ms | **🍎 Apple** (1.1x faster) |
-| Wait: Composite | 733ms | 778ms | **🍎 Apple** |
-| Wait: Log (spam) | 603ms | 807ms | **🍎 Apple** (1.3x faster) |
-| Parallel startup (2) | 1.04s | 299ms | **🐳 Docker** (3.4x faster) |
-| Parallel startup (4) | 1.99s | 357ms | **🐳 Docker** (5.5x faster) |
-| Parallel startup (8) | 4.36s | 471ms | **🐳 Docker** (9.2x faster) |
-| TCP Latency (Redis) | 301ms | 306ms | **🍎 Apple** |
+| Stop | 182ms | 120ms | **🐳 Docker** (1.5x faster) |
+| Start (restart) | 24.5ms | 177ms | **🍎 Apple** (7.2x faster) |
+| Terminate | 210ms | 149ms | **🐳 Docker** (1.4x faster) |
+| Inspect | 58.8ms | 43.0ms | **🐳 Docker** (1.4x faster) |
+| Exec (`echo hello`) | 713ms | 159ms | **🐳 Docker** (4.5x faster) |
+| Copy To (1 KB) | 69.9ms | 42.4ms | **🐳 Docker** (1.6x faster) |
+| Copy To (1 MB) | 75.8ms | 45.1ms | **🐳 Docker** (1.7x faster) |
+| Copy From (1 KB) | 59.3ms | 45.2ms | **🐳 Docker** (1.3x faster) |
+| Copy From (1 MB) | 63.4ms | 43.8ms | **🐳 Docker** (1.4x faster) |
+| Logs (10k lines) | 1.10s | 2.06s | **🍎 Apple** (1.9x faster) |
+| Wait: HTTP | 561ms | 230ms | **🐳 Docker** (2.4x faster) |
+| Wait: SQL (pgx) | 1.49s | 956ms | **🐳 Docker** (1.6x faster) |
+| Wait: Exec | 572ms | 245ms | **🐳 Docker** (2.3x faster) |
+| Wait: Health | 538ms | 327ms | **🐳 Docker** (1.6x faster) |
+| Wait: Composite | 597ms | 333ms | **🐳 Docker** (1.8x faster) |
+| Wait: Log (spam) | 560ms | 216ms | **🐳 Docker** (2.6x faster) |
+| Parallel startup (2) | 1.01s | 247ms | **🐳 Docker** (4.1x faster) |
+| Parallel startup (4) | 1.99s | 324ms | **🐳 Docker** (6.2x faster) |
+| Parallel startup (8) | 4.28s | 448ms | **🐳 Docker** (9.6x faster) |
+| TCP Latency (Redis) | 97.0ms | 163ms | **🍎 Apple** (1.7x faster) |
 
-*(Specs: Go 1.24 · darwin/arm64 · Apple M5)*
+**PostgreSQL driver microbenchmarks** (`µs/op`):
 
-**Takeaway:** `applecontainer-go` excels at raw, synchronous container lifecycle operations (like cold restarts and bulk log retrieval). However, Docker is currently much faster at handling highly parallel workloads, network polling (Wait strategies), and TCP loopback latency. Run the suite yourself to verify on your hardware.
+| Operation | `pgx` | `database/sql` (`lib/pq`) | `GORM` | Fastest |
+| :--- | ---: | ---: | ---: | :---: |
+| Insert | 89.4µs | 145µs | 249µs | **pgx** |
+| Bulk insert (100 rows) | 214µs | 297µs | 385µs | **pgx** |
+| Select by primary key | 84.3µs | 160µs | 93.1µs | **pgx** |
+| Select with filter | 92.2µs | 158µs | 111µs | **pgx** |
+| Update | 91.3µs | 160µs | 233µs | **pgx** |
+| Delete | 93.5µs | 85.1µs | 102µs | **database/sql** |
+
+*(Specs: Go 1.26.5 · darwin/arm64 · Apple M5; wait rows rerun after the wait-path optimization with the same `5x` settings.)*
+
+**Takeaway:** `applecontainer-go` is especially strong at restarts, bulk log retrieval, and direct container TCP access. Caching wait-target endpoints and probing immediately reduced the documented HTTP wait result from 11.18s to 561ms (about 20x faster). Docker remains faster for highly parallel startup, exec-heavy waits, and copy operations; the copy gap is now roughly 1.3-1.7x and is mostly dominated by spawning `container cp` for each transfer. In the PostgreSQL driver benchmarks, `pgx` is fastest in five of six operations, while `database/sql` leads the delete benchmark. Run the suite yourself to verify on your hardware.
 
 ---
 

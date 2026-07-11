@@ -27,19 +27,30 @@ func ForFile(path string) *FileStrategy {
 
 // WaitUntilReady checks for file presence in the container using CopyFileFromContainer.
 func (s *FileStrategy) WaitUntilReady(ctx context.Context, target StrategyTarget) error {
+	checkReady := func() bool {
+		rc, err := target.CopyFileFromContainer(ctx, s.Path)
+		if err != nil {
+			return false
+		}
+		_ = rc.Close()
+		return true
+	}
+
 	ticker := time.NewTicker(s.PollInterval)
 	defer ticker.Stop()
 
 	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if checkReady() {
+			return nil
+		}
+
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			rc, err := target.CopyFileFromContainer(ctx, s.Path)
-			if err == nil {
-				_ = rc.Close()
-				return nil
-			}
 		}
 	}
 }

@@ -25,23 +25,30 @@ func ForExit() *ExitStrategy {
 
 // WaitUntilReady blocks until the container's status is not "running".
 func (s *ExitStrategy) WaitUntilReady(ctx context.Context, target StrategyTarget) error {
+	checkReady := func() bool {
+		status, err := target.StateStatus(ctx)
+		if err != nil {
+			// Container might not be created or might be gone already.
+			return true
+		}
+		return status != "running"
+	}
+
 	ticker := time.NewTicker(s.PollInterval)
 	defer ticker.Stop()
 
 	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if checkReady() {
+			return nil
+		}
+
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			status, err := target.StateStatus(ctx)
-			if err != nil {
-				// Container might not be created or might be gone already
-				return nil
-			}
-
-			if status != "running" {
-				return nil
-			}
 		}
 	}
 }

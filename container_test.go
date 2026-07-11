@@ -209,6 +209,93 @@ func TestContainerEndpointMath_HostPortMapping(t *testing.T) {
 	}
 }
 
+func TestWaitTargetCachesResolvedEndpoints(t *testing.T) {
+	t.Run("host lookup", func(t *testing.T) {
+		inspectJSON := `[
+			{
+				"id": "test-container-id",
+				"status": {
+					"networks": [
+						{
+							"network": "default",
+							"ipv4Address": "192.168.64.9/24"
+						}
+					],
+					"state": "running"
+				}
+			}
+		]`
+
+		runner := &fakeRunner{
+			runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
+				if len(args) == 2 && args[0] == "inspect" && args[1] == "test-container-id" {
+					return []byte(inspectJSON), nil, 0, nil
+				}
+				return nil, nil, 0, nil
+			},
+		}
+
+		c := &cliContainer{
+			provider: &cliProvider{runner: runner, log: log.TestLogger(t)},
+			id:       "test-container-id",
+			req:      ContainerRequest{HostPortMapping: false},
+		}
+		wt := waitTarget{cliContainer: c}
+
+		host1, err := wt.Host(context.Background())
+		require.NoError(t, err)
+		host2, err := wt.Host(context.Background())
+		require.NoError(t, err)
+		assert.Equal(t, "192.168.64.9", host1)
+		assert.Equal(t, host1, host2)
+		assert.Equal(t, 1, runner.callCount)
+	})
+
+	t.Run("mapped port lookup", func(t *testing.T) {
+		inspectJSON := `[
+			{
+				"id": "test-container-id",
+				"configuration": {
+					"publishedPorts": [
+						{
+							"containerPort": 80,
+							"hostPort": 32768,
+							"proto": "tcp"
+						}
+					]
+				},
+				"status": {
+					"state": "running"
+				}
+			}
+		]`
+
+		runner := &fakeRunner{
+			runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
+				if len(args) == 2 && args[0] == "inspect" && args[1] == "test-container-id" {
+					return []byte(inspectJSON), nil, 0, nil
+				}
+				return nil, nil, 0, nil
+			},
+		}
+
+		c := &cliContainer{
+			provider: &cliProvider{runner: runner, log: log.TestLogger(t)},
+			id:       "test-container-id",
+			req:      ContainerRequest{HostPortMapping: true},
+		}
+		wt := waitTarget{cliContainer: c}
+
+		mapped1, err := wt.MappedPort(context.Background(), "80")
+		require.NoError(t, err)
+		mapped2, err := wt.MappedPort(context.Background(), "80/tcp")
+		require.NoError(t, err)
+		assert.Equal(t, 32768, mapped1)
+		assert.Equal(t, mapped1, mapped2)
+		assert.Equal(t, 1, runner.callCount)
+	})
+}
+
 func TestContainerStartStopLifecycle(t *testing.T) {
 	var startArgs []string
 	var stopArgs []string
@@ -480,6 +567,36 @@ func TestContainerDelegationProper(t *testing.T) {
 	cf, err := wt.CopyFileFromContainer(ctx, "/tmp/hello")
 	require.NoError(t, err)
 	assert.NotNil(t, cf)
+}
+
+func TestContainer_CopyFileToContainer_UsesDirectCopyWhenModeMatches(t *testing.T) {
+	var capturedArgs []string
+	runner := &fakeRunner{
+		runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
+			capturedArgs = args
+			return nil, nil, 0, nil
+		},
+	}
+	p := &cliProvider{
+		runner: runner,
+		log:    log.TestLogger(t),
+	}
+	c := &cliContainer{
+		provider: p,
+		id:       "cov-id",
+	}
+
+	tmpFile, err := os.CreateTemp("", "direct-copy")
+	require.NoError(t, err)
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
+	_, err = tmpFile.WriteString("hello")
+	require.NoError(t, err)
+	require.NoError(t, tmpFile.Close())
+	require.NoError(t, os.Chmod(tmpFile.Name(), 0o644))
+
+	err = c.CopyFileToContainer(context.Background(), tmpFile.Name(), "/tmp/hello", 0o644)
+	require.NoError(t, err)
+	require.Equal(t, []string{"cp", tmpFile.Name(), "cov-id:/tmp/hello"}, capturedArgs)
 }
 
 func TestContainer_CopyFileToContainer_Error(t *testing.T) {

@@ -36,31 +36,42 @@ func (s *PortStrategy) WaitUntilReady(ctx context.Context, target StrategyTarget
 		return fmt.Errorf("invalid port specification: %s", s.Port)
 	}
 
+	checkReady := func() bool {
+		host, err := target.Host(ctx)
+		if err != nil {
+			return false
+		}
+
+		mappedPort, err := target.MappedPort(ctx, s.Port)
+		if err != nil {
+			return false
+		}
+
+		address := net.JoinHostPort(host, strconv.Itoa(mappedPort))
+		dialer := net.Dialer{}
+		conn, err := dialer.DialContext(ctx, proto, address)
+		if err != nil {
+			return false
+		}
+		_ = conn.Close()
+		return true
+	}
+
 	ticker := time.NewTicker(s.PollInterval)
 	defer ticker.Stop()
 
 	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if checkReady() {
+			return nil
+		}
+
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			host, err := target.Host(ctx)
-			if err != nil {
-				continue
-			}
-
-			mappedPort, err := target.MappedPort(ctx, s.Port)
-			if err != nil {
-				continue
-			}
-
-			address := net.JoinHostPort(host, strconv.Itoa(mappedPort))
-			dialer := net.Dialer{}
-			conn, err := dialer.DialContext(ctx, proto, address)
-			if err == nil {
-				_ = conn.Close()
-				return nil
-			}
 		}
 	}
 }

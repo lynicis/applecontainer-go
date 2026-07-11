@@ -80,9 +80,6 @@ func ForHTTP(path string) *HTTPStrategy {
 
 // WaitUntilReady queries the HTTP endpoint until it returns a matching status and body, or times out.
 func (s *HTTPStrategy) WaitUntilReady(ctx context.Context, target StrategyTarget) error {
-	ticker := time.NewTicker(s.PollInterval)
-	defer ticker.Stop()
-
 	// By default, match 200 OK
 	statusMatcher := s.StatusCodeMatcher
 	if statusMatcher == nil {
@@ -103,55 +100,64 @@ func (s *HTTPStrategy) WaitUntilReady(ctx context.Context, target StrategyTarget
 		Timeout:   2 * time.Second,
 	}
 
+	checkReady := func() bool {
+		host, err := target.Host(ctx)
+		if err != nil {
+			return false
+		}
+
+		mappedPort, err := target.MappedPort(ctx, s.Port)
+		if err != nil {
+			return false
+		}
+
+		scheme := "http"
+		if s.UseTLS {
+			scheme = "https"
+		}
+
+		u := url.URL{
+			Scheme: scheme,
+			Host:   net.JoinHostPort(host, strconv.Itoa(mappedPort)),
+			Path:   s.Path,
+		}
+
+		req, err := http.NewRequestWithContext(ctx, s.Method, u.String(), nil)
+		if err != nil {
+			return false
+		}
+		if s.User != "" || s.Password != "" {
+			req.SetBasicAuth(s.User, s.Password)
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			return false
+		}
+		defer func() { _ = resp.Body.Close() }()
+
+		ok := statusMatcher(resp.StatusCode)
+		if ok && s.ResponseMatcher != nil {
+			ok = s.ResponseMatcher(resp.Body)
+		}
+		return ok
+	}
+
+	ticker := time.NewTicker(s.PollInterval)
+	defer ticker.Stop()
+
 	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if checkReady() {
+			return nil
+		}
+
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			host, err := target.Host(ctx)
-			if err != nil {
-				continue
-			}
-
-			mappedPort, err := target.MappedPort(ctx, s.Port)
-			if err != nil {
-				continue
-			}
-
-			scheme := "http"
-			if s.UseTLS {
-				scheme = "https"
-			}
-
-			u := url.URL{
-				Scheme: scheme,
-				Host:   net.JoinHostPort(host, strconv.Itoa(mappedPort)),
-				Path:   s.Path,
-			}
-
-			req, err := http.NewRequestWithContext(ctx, s.Method, u.String(), nil)
-			if err != nil {
-				continue
-			}
-
-			if s.User != "" || s.Password != "" {
-				req.SetBasicAuth(s.User, s.Password)
-			}
-
-			resp, err := client.Do(req)
-			if err != nil {
-				continue
-			}
-
-			ok := statusMatcher(resp.StatusCode)
-			if ok && s.ResponseMatcher != nil {
-				ok = s.ResponseMatcher(resp.Body)
-			}
-			_ = resp.Body.Close()
-
-			if ok {
-				return nil
-			}
 		}
 	}
 }

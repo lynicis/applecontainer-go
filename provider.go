@@ -264,11 +264,35 @@ func (p *cliProvider) ExecContainer(ctx context.Context, id string, cmd []string
 	return exitCode, stdout, err
 }
 
+func checkedFileMode(mode int64) (os.FileMode, error) {
+	if mode < 0 || mode > int64(^uint32(0)) {
+		return 0, fmt.Errorf("applecontainer: invalid file mode %d", mode)
+	}
+	return os.FileMode(uint32(mode)), nil
+}
+
+func (p *cliProvider) copyHostFileToContainer(ctx context.Context, id, hostPath, containerPath string) error {
+	if id == "" {
+		return fmt.Errorf("applecontainer: cannot copy to empty container ID")
+	}
+	args := []string{"cp", filepath.Clean(hostPath), fmt.Sprintf("%s:%s", id, containerPath)}
+	_, _, _, err := p.runner.Run(ctx, args, nil)
+	if err != nil {
+		return fmt.Errorf("applecontainer: copy to container failed: %w", err)
+	}
+	return nil
+}
+
 // CopyToContainer copies data to a path inside a container.
 func (p *cliProvider) CopyToContainer(ctx context.Context, id, containerPath string, content []byte, mode int64) error {
 	if id == "" {
 		return fmt.Errorf("applecontainer: cannot copy to empty container ID")
 	}
+	fileMode, err := checkedFileMode(mode)
+	if err != nil {
+		return err
+	}
+
 	tmpFile, err := os.CreateTemp("", "applecontainer-copy-*")
 	if err != nil {
 		return fmt.Errorf("applecontainer: failed to create temporary file for copy: %w", err)
@@ -282,8 +306,7 @@ func (p *cliProvider) CopyToContainer(ctx context.Context, id, containerPath str
 	}
 	_ = tmpFile.Close()
 
-	// #nosec G115
-	if err := os.Chmod(tmpPath, os.FileMode(uint32(mode))); err != nil {
+	if err := os.Chmod(tmpPath, fileMode); err != nil {
 		return fmt.Errorf("applecontainer: failed to chmod temp file: %w", err)
 	}
 

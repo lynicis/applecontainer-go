@@ -743,3 +743,15 @@ func TestCopyToContainerErrors(t *testing.T) {
 	err = p2.CopyToContainer(context.Background(), "id", "/dest", []byte{}, 0644)
 	assert.ErrorContains(t, err, "cp fail")
 }
+
+func TestCheckedFileMode(t *testing.T) {
+	mode, err := checkedFileMode(0o644)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o644), mode)
+
+	_, err = checkedFileMode(-1)
+	assert.ErrorContains(t, err, "invalid file mode")
+
+	_, err = checkedFileMode(int64(^uint32(0)) + 1)
+	assert.ErrorContains(t, err, "invalid file mode")
+}

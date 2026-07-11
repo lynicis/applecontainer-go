@@ -25,27 +25,34 @@ func ForHealth() *HealthStrategy {
 
 // WaitUntilReady blocks until the container is running and has exit code 0.
 func (s *HealthStrategy) WaitUntilReady(ctx context.Context, target StrategyTarget) error {
+	checkReady := func() bool {
+		status, err := target.StateStatus(ctx)
+		if err != nil {
+			return false
+		}
+
+		code, err := target.StateExitCode(ctx)
+		if err != nil {
+			return false
+		}
+		return status == "running" && code == 0
+	}
+
 	ticker := time.NewTicker(s.PollInterval)
 	defer ticker.Stop()
 
 	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if checkReady() {
+			return nil
+		}
+
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			status, err := target.StateStatus(ctx)
-			if err != nil {
-				continue
-			}
-
-			code, err := target.StateExitCode(ctx)
-			if err != nil {
-				continue
-			}
-
-			if status == "running" && code == 0 {
-				return nil
-			}
 		}
 	}
 }

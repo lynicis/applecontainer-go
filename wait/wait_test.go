@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type fakeTarget struct {
@@ -355,6 +356,87 @@ func TestForFile(t *testing.T) {
 	err := strat.WaitUntilReady(context.Background(), target)
 	if err != nil {
 		t.Fatalf("ForFile failed: %v", err)
+	}
+}
+
+func TestPollStrategiesProbeImmediately(t *testing.T) {
+	registerOnce.Do(func() {
+		sql.Register("mockdb", &mockDriver{})
+	})
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	host, portString, err := net.SplitHostPort(server.Listener.Addr().String())
+	require.NoError(t, err)
+	port, err := strconv.Atoi(portString)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name     string
+		strategy Strategy
+		target   StrategyTarget
+	}{
+		{
+			name:     "http",
+			strategy: ForHTTP("/").WithPort("80").WithPollInterval(time.Hour),
+			target: &fakeTarget{
+				hostFunc:       func(context.Context) (string, error) { return host, nil },
+				mappedPortFunc: func(context.Context, string) (int, error) { return port, nil },
+			},
+		},
+		{
+			name:     "port",
+			strategy: ForListeningPort("80").WithPollInterval(time.Hour),
+			target: &fakeTarget{
+				hostFunc:       func(context.Context) (string, error) { return host, nil },
+				mappedPortFunc: func(context.Context, string) (int, error) { return port, nil },
+			},
+		},
+		{
+			name:     "sql",
+			strategy: ForSQL("3306", "mockdb", func(string, int) string { return "success" }).WithPollInterval(time.Hour),
+			target: &fakeTarget{
+				hostFunc:       func(context.Context) (string, error) { return "localhost", nil },
+				mappedPortFunc: func(context.Context, string) (int, error) { return 3306, nil },
+			},
+		},
+		{
+			name:     "exec",
+			strategy: ForExec([]string{"true"}).WithPollInterval(time.Hour),
+			target:   &fakeTarget{},
+		},
+		{
+			name:     "health",
+			strategy: ForHealth().WithPollInterval(time.Hour),
+			target:   &fakeTarget{},
+		},
+		{
+			name:     "exit",
+			strategy: ForExit().WithPollInterval(time.Hour),
+			target: &fakeTarget{
+				statusFunc: func(context.Context) (string, error) { return "exited", nil },
+			},
+		},
+		{
+			name:     "file",
+			strategy: ForFile("/ready").WithPollInterval(time.Hour),
+			target: &fakeTarget{
+				copyFileFunc: func(context.Context, string) (io.ReadCloser, error) {
+					return io.NopCloser(strings.NewReader("ready")), nil
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+			defer cancel()
+			require.NoError(t, tt.strategy.WaitUntilReady(ctx, tt.target))
+		})
 	}
 }
 
