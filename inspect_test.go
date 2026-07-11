@@ -154,7 +154,23 @@ func TestParseInspectErrors(t *testing.T) {
 	if _, err := parseInspect([]byte("[]")); err == nil {
 		t.Fatal("want error for empty array")
 	}
+	if _, err := parseInspect([]byte("null")); err == nil {
+		t.Fatal("want error for null result")
+	}
 	if _, err := parseInspect([]byte(`[{"configuration":{}}]`)); err == nil {
 		t.Fatal("want error for missing id")
+	}
+	if _, err := parseInspect([]byte(`[{"id":"first"},invalid]`)); err == nil {
+		t.Fatal("want error for invalid trailing element")
+	}
+}
+
+func TestParseInspectReturnsFirstResult(t *testing.T) {
+	got, err := parseInspect([]byte(`[{"id":"first"},{"id":"second"}]`))
+	if err != nil {
+		t.Fatalf("parseInspect: %v", err)
+	}
+	if got.ID != "first" {
+		t.Fatalf("ID=%q want first", got.ID)
 	}
 }

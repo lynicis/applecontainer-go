@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/lynicis/applecontainer-go/log"
+	"github.com/lynicis/applecontainer-go/wait"
 )
 
 func TestContainerEndpointMath_DirectIP(t *testing.T) {
@@ -292,6 +293,37 @@ func TestWaitTargetCachesResolvedEndpoints(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 32768, mapped1)
 		assert.Equal(t, mapped1, mapped2)
+		assert.Equal(t, 1, runner.callCount)
+	})
+
+	t.Run("combined state lookup", func(t *testing.T) {
+		inspectJSON := `[
+			{
+				"id": "test-container-id",
+				"status": {
+					"state": "running",
+					"exitCode": 0
+				}
+			}
+		]`
+
+		runner := &fakeRunner{
+			runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
+				if len(args) == 2 && args[0] == "inspect" && args[1] == "test-container-id" {
+					return []byte(inspectJSON), nil, 0, nil
+				}
+				return nil, nil, 0, nil
+			},
+		}
+
+		wt := waitTarget{cliContainer: &cliContainer{
+			provider: &cliProvider{runner: runner, log: log.TestLogger(t)},
+			id:       "test-container-id",
+		}}
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		require.NoError(t, wait.ForHealth().WaitUntilReady(ctx, wt))
 		assert.Equal(t, 1, runner.callCount)
 	})
 }

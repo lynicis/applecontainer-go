@@ -4,10 +4,10 @@ package applecontainer
 // (`container inspect <id>` and `container list --format json` share this shape).
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"strings"
-
-	"encoding/json"
 )
 
 // Inspect is the parsed result of `container inspect <id>` and
@@ -169,15 +169,21 @@ type InspectMountType struct {
 // returns the first element. It requires a non-empty id. Unknown JSON fields
 // are ignored.
 func parseInspect(data []byte) (*Inspect, error) {
-	var arr []Inspect
-	if err := json.Unmarshal(data, &arr); err != nil {
+	var result [1]Inspect
+	if err := json.Unmarshal(data, &result); err != nil {
 		return nil, fmt.Errorf("applecontainer: parse inspect: %w", err)
 	}
-	if len(arr) == 0 {
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) || isEmptyJSONArray(data) {
 		return nil, fmt.Errorf("applecontainer: parse inspect: empty result")
 	}
-	if arr[0].ID == "" {
+	if result[0].ID == "" {
 		return nil, fmt.Errorf("applecontainer: parse inspect: missing id")
 	}
-	return &arr[0], nil
+	return &result[0], nil
+}
+
+func isEmptyJSONArray(data []byte) bool {
+	data = bytes.TrimSpace(data)
+	return len(data) >= 2 && data[0] == '[' && data[len(data)-1] == ']' &&
+		len(bytes.TrimSpace(data[1:len(data)-1])) == 0
 }

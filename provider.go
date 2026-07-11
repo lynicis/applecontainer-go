@@ -404,9 +404,9 @@ func parseImageInspect(data []byte) (*ImageInspect, error) {
 	}
 
 	if data[0] == '[' {
-		var arr []ImageInspect
-		if err := json.Unmarshal(data, &arr); err == nil && len(arr) > 0 {
-			return &arr[0], nil
+		var result [1]ImageInspect
+		if err := json.Unmarshal(data, &result); err == nil && !isEmptyJSONArray(data) {
+			return &result[0], nil
 		}
 	} else {
 		var obj ImageInspect

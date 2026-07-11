@@ -10,6 +10,10 @@ type HealthStrategy struct {
 	PollInterval time.Duration
 }
 
+type combinedStateTarget interface {
+	StateStatusAndExitCode(ctx context.Context) (string, int, error)
+}
+
 // WithPollInterval sets the polling interval.
 func (s *HealthStrategy) WithPollInterval(d time.Duration) *HealthStrategy {
 	s.PollInterval = d
@@ -26,6 +30,11 @@ func ForHealth() *HealthStrategy {
 // WaitUntilReady blocks until the container is running and has exit code 0.
 func (s *HealthStrategy) WaitUntilReady(ctx context.Context, target StrategyTarget) error {
 	checkReady := func() bool {
+		if stateTarget, ok := target.(combinedStateTarget); ok {
+			status, code, err := stateTarget.StateStatusAndExitCode(ctx)
+			return err == nil && status == "running" && code == 0
+		}
+
 		status, err := target.StateStatus(ctx)
 		if err != nil {
 			return false

@@ -476,6 +476,14 @@ func (w waitTarget) StateExitCode(ctx context.Context) (int, error) {
 	return w.cliContainer.StateExitCode(ctx)
 }
 
+func (w waitTarget) StateStatusAndExitCode(ctx context.Context) (string, int, error) {
+	state, err := w.State(ctx)
+	if err != nil {
+		return "", 0, err
+	}
+	return state.Status, state.ExitCode, nil
+}
+
 func (w waitTarget) Logs(ctx context.Context) (io.ReadCloser, error) {
 	return w.provider.ContainerLogs(ctx, w.id, true, 0)
 }

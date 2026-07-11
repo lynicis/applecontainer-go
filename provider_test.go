@@ -688,7 +688,7 @@ func TestHealth(t *testing.T) {
 
 func TestParseImageInspect(t *testing.T) {
 	// 1. Array
-	ii1, err := parseImageInspect([]byte(`[{"id": "sha256:123"}]`))
+	ii1, err := parseImageInspect([]byte(`[{"id": "sha256:123"}, {"id": "sha256:ignored"}]`))
 	require.NoError(t, err)
 	assert.Equal(t, "sha256:123", ii1.ID)
 
@@ -697,8 +697,12 @@ func TestParseImageInspect(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "sha256:456", ii2.ID)
 
-	// 3. Invalid JSON
+	// 3. Invalid and empty JSON
 	_, err = parseImageInspect([]byte(`invalid`))
+	assert.ErrorContains(t, err, "failed to parse image inspect JSON")
+	_, err = parseImageInspect([]byte(`[]`))
+	assert.ErrorContains(t, err, "failed to parse image inspect JSON")
+	_, err = parseImageInspect([]byte(`[{"id":"sha256:123"}, invalid]`))
 	assert.ErrorContains(t, err, "failed to parse image inspect JSON")
 }
 
