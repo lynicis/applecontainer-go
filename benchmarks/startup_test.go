@@ -26,7 +26,7 @@ func startupImages() []startupImage {
 
 func BenchmarkStartup(b *testing.B) {
 	if os.Getenv("APPLECONTAINER_BENCHMARK") == "" {
-		b.Fatal("Set APPLECONTAINER_BENCHMARK=1 to run benchmarks")
+		b.Skip("Set APPLECONTAINER_BENCHMARK=1 to run benchmarks")
 	}
 
 	for _, img := range startupImages() {
@@ -41,7 +41,7 @@ func BenchmarkStartup(b *testing.B) {
 				c, err := applecontainer.Run(ctx, img.image,
 					applecontainer.WithExposedPorts("80"),
 					applecontainer.WithEnv(map[string]string{"POSTGRES_PASSWORD": "test"}),
-					applecontainer.WithWaitStrategyAndDeadline(img.wait, 120*time.Second),
+					applecontainer.WithWaitingFor(wait.ForAll(img.wait).WithDeadline(120*time.Second)),
 				)
 				if err != nil {
 					b.Fatal(err)

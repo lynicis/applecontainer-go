@@ -19,7 +19,7 @@ import (
 
 func BenchmarkHTTPThroughput(b *testing.B) {
 	if os.Getenv("APPLECONTAINER_BENCHMARK") == "" {
-		b.Fatal("Set APPLECONTAINER_BENCHMARK=1 to run benchmarks")
+		b.Skip("Set APPLECONTAINER_BENCHMARK=1 to run benchmarks")
 	}
 
 	// Apple container networking doesn't support inbound HTTP from host.
@@ -72,7 +72,7 @@ func BenchmarkTCPLatency(b *testing.B) {
 		case AppleContainer:
 			c, err := applecontainer.Run(ctx, img,
 				applecontainer.WithExposedPorts("6379"),
-				applecontainer.WithWaitStrategyAndDeadline(wait.ForLog("Ready"), 120*time.Second),
+				applecontainer.WithWaitingFor(wait.ForAll(wait.ForLog("Ready")).WithDeadline(120*time.Second)),
 			)
 			if err != nil {
 				b.Fatal(err)

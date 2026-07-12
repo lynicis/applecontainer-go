@@ -37,7 +37,7 @@ func BenchmarkParallel(b *testing.B) {
 							case AppleContainer:
 								c, err := applecontainer.Run(ctx, img,
 									applecontainer.WithExposedPorts("80"),
-									applecontainer.WithWaitStrategyAndDeadline(wait.ForLog("ready for start up"), 120*time.Second),
+									applecontainer.WithWaitingFor(wait.ForAll(wait.ForLog("ready for start up")).WithDeadline(120*time.Second)),
 								)
 								if err != nil {
 									b.Error(err)

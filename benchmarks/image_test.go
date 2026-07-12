@@ -18,7 +18,7 @@ import (
 
 func BenchmarkImagePull(b *testing.B) {
 	if os.Getenv("APPLECONTAINER_BENCHMARK") == "" {
-		b.Fatal("Set APPLECONTAINER_BENCHMARK=1 to run benchmarks")
+		b.Skip("Set APPLECONTAINER_BENCHMARK=1 to run benchmarks")
 	}
 
 	b.Run("testcontainers-go", func(b *testing.B) {
@@ -64,10 +64,10 @@ func BenchmarkImagePull(b *testing.B) {
 			c, err := applecontainer.Run(ctx, img,
 				applecontainer.WithExposedPorts("5432"),
 				applecontainer.WithEnv(map[string]string{"POSTGRES_PASSWORD": "test"}),
-				applecontainer.WithWaitStrategyAndDeadline(
-					wait.ForExec([]string{"pg_isready", "-U", "postgres"}),
-					300*time.Second,
-				),
+				applecontainer.WithWaitingFor(wait.ForAll(
+					wait.ForExec([]string{"pg_isready", "-U", "postgres"})).WithDeadline(
+
+					300*time.Second)),
 			)
 			if err != nil {
 				b.Fatal(err)
@@ -81,7 +81,7 @@ func BenchmarkImagePull(b *testing.B) {
 
 func BenchmarkImageBuild(b *testing.B) {
 	if os.Getenv("APPLECONTAINER_BENCHMARK") == "" {
-		b.Fatal("Set APPLECONTAINER_BENCHMARK=1 to run benchmarks")
+		b.Skip("Set APPLECONTAINER_BENCHMARK=1 to run benchmarks")
 	}
 
 	b.Run("testcontainers-go", func(b *testing.B) {

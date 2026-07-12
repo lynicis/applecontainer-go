@@ -11,18 +11,13 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 )
 
 // Config holds resolved configuration for the applecontainer-go library.
 // Read once (sync.Once) from ~/.applecontainer.properties + env on first use.
 type Config struct {
-	BinaryPath      string
-	Debug           bool
-	DefaultNetwork  string
-	DefaultPlatform string
-	HubImagePrefix  string
-	PullTimeout     time.Duration
+	BinaryPath string
+	Debug      bool
 }
 
 var (
@@ -55,10 +50,7 @@ func Reset() {
 }
 
 func readConfig() Config {
-	c := Config{
-		DefaultNetwork: "default",
-		PullTimeout:    5 * time.Minute,
-	}
+	c := Config{}
 	if propertiesPath != "" {
 		if b, err := os.ReadFile(filepath.Clean(propertiesPath)); err == nil {
 			applyProperties(&c, string(b))
@@ -91,16 +83,6 @@ func applyProperties(c *Config, content string) {
 		switch k {
 		case "container.binary.path":
 			c.BinaryPath = v
-		case "container.default.network":
-			c.DefaultNetwork = v
-		case "container.default.platform":
-			c.DefaultPlatform = v
-		case "hub.image.name.prefix":
-			c.HubImagePrefix = v
-		case "container.pull.timeout":
-			if d, err := time.ParseDuration(v); err == nil {
-				c.PullTimeout = d
-			}
 		case "container.debug":
 			c.Debug = parseBool(v)
 		}
@@ -114,20 +96,11 @@ func applyEnv(c *Config) {
 	if v, ok := os.LookupEnv("CONTAINER_DEBUG"); ok {
 		c.Debug = parseBool(v)
 	}
-	if v, ok := os.LookupEnv("CONTAINER_DEFAULT_PLATFORM"); ok {
-		c.DefaultPlatform = v
-	}
-	if v, ok := os.LookupEnv("APPLECONTAINER_HUB_IMAGE_NAME_PREFIX"); ok {
-		c.HubImagePrefix = v
-	}
 }
 
 func parseBool(s string) bool {
-	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "true", "1", "yes", "on":
-		return true
-	}
-	return false
+	b, _ := strconv.ParseBool(strings.TrimSpace(s))
+	return b
 }
 
 // runner returns the commandRunner used to invoke the container binary.

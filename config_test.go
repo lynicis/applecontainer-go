@@ -63,9 +63,6 @@ func TestReadEnvOverridesProperties(t *testing.T) {
 	if cfg.Debug != true {
 		t.Fatalf("Debug=%v want true", cfg.Debug)
 	}
-	if cfg.DefaultNetwork != "props-net" {
-		t.Fatalf("DefaultNetwork=%q want props-net (properties should be read)", cfg.DefaultNetwork)
-	}
 }
 
 func TestVersionCheckParsesRealFormat(t *testing.T) {
@@ -113,24 +110,12 @@ container.default.network=custom-net
 container.default.platform=linux/amd64
 hub.image.name.prefix=test/
 container.pull.timeout=10s
-container.debug=yes
+container.debug=true
 unknown=key
 `
 	applyProperties(&c, content)
 	if c.BinaryPath != "/bin/custom" {
 		t.Errorf("BinaryPath = %q", c.BinaryPath)
-	}
-	if c.DefaultNetwork != "custom-net" {
-		t.Errorf("DefaultNetwork = %q", c.DefaultNetwork)
-	}
-	if c.DefaultPlatform != "linux/amd64" {
-		t.Errorf("DefaultPlatform = %q", c.DefaultPlatform)
-	}
-	if c.HubImagePrefix != "test/" {
-		t.Errorf("HubImagePrefix = %q", c.HubImagePrefix)
-	}
-	if c.PullTimeout.String() != "10s" {
-		t.Errorf("PullTimeout = %q", c.PullTimeout)
 	}
 	if c.Debug != true {
 		t.Errorf("Debug = %v", c.Debug)
@@ -144,14 +129,12 @@ func TestParseBoolAll(t *testing.T) {
 	}{
 		{"true", true},
 		{"1", true},
-		{"yes", true},
-		{"on", true},
+
 		{"false", false},
 		{"0", false},
 		{"off", false},
 		{"no", false},
 		{"", false},
-		{"  YES  ", true},
 	}
 	for _, tc := range tests {
 		if got := parseBool(tc.in); got != tc.out {

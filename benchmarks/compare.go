@@ -21,7 +21,7 @@ const (
 // RunWithBoth runs the benchmark function for both runtimes in sub-benchmarks.
 func RunWithBoth(b *testing.B, fn func(b *testing.B, rt Runtime)) {
 	if os.Getenv("APPLECONTAINER_BENCHMARK") == "" {
-		b.Fatal("Set APPLECONTAINER_BENCHMARK=1 to run benchmarks")
+		b.Skip("Set APPLECONTAINER_BENCHMARK=1 to run benchmarks")
 	}
 
 	b.Run("applecontainer", func(b *testing.B) {

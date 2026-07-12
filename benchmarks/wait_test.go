@@ -25,7 +25,7 @@ func BenchmarkWaitStrategyHTTP(b *testing.B) {
 				b.StartTimer()
 				c, err := applecontainer.Run(ctx, img,
 					applecontainer.WithExposedPorts("80"),
-					applecontainer.WithWaitStrategyAndDeadline(wait.ForHTTP("/").WithPort("80"), 120*time.Second),
+					applecontainer.WithWaitingFor(wait.ForAll(wait.ForHTTP("/").WithPort("80")).WithDeadline(120*time.Second)),
 				)
 				if err != nil {
 					b.Fatal(err)
@@ -70,12 +70,12 @@ func BenchmarkWaitStrategySQL(b *testing.B) {
 				c, err := applecontainer.Run(ctx, img,
 					applecontainer.WithExposedPorts("5432"),
 					applecontainer.WithEnv(env),
-					applecontainer.WithWaitStrategyAndDeadline(
+					applecontainer.WithWaitingFor(wait.ForAll(
 						wait.ForSQL("5432", "pgx", func(host string, port int) string {
 							return fmt.Sprintf("user=postgres password=test host=%s port=%d dbname=postgres sslmode=disable", host, port)
-						}),
-						120*time.Second,
-					),
+						})).WithDeadline(
+
+						120*time.Second)),
 				)
 				if err != nil {
 					b.Fatal(err)
@@ -120,7 +120,7 @@ func BenchmarkWaitStrategyExec(b *testing.B) {
 				b.StartTimer()
 				c, err := applecontainer.Run(ctx, img,
 					applecontainer.WithCmd(cmd...),
-					applecontainer.WithWaitStrategyAndDeadline(wait.ForExec([]string{"true"}), 120*time.Second),
+					applecontainer.WithWaitingFor(wait.ForAll(wait.ForExec([]string{"true"})).WithDeadline(120*time.Second)),
 				)
 				if err != nil {
 					b.Fatal(err)
@@ -165,7 +165,7 @@ func BenchmarkWaitStrategyHealth(b *testing.B) {
 				c, err := applecontainer.Run(ctx, img,
 					applecontainer.WithExposedPorts("80"),
 					applecontainer.WithCmd(cmd...),
-					applecontainer.WithWaitStrategyAndDeadline(wait.ForHealth(), 120*time.Second),
+					applecontainer.WithWaitingFor(wait.ForAll(wait.ForHealth()).WithDeadline(120*time.Second)),
 				)
 				if err != nil {
 					b.Fatal(err)
@@ -211,13 +211,13 @@ func BenchmarkWaitStrategyComposite(b *testing.B) {
 				b.StartTimer()
 				c, err := applecontainer.Run(ctx, img,
 					applecontainer.WithExposedPorts("80"),
-					applecontainer.WithWaitStrategyAndDeadline(
+					applecontainer.WithWaitingFor(wait.ForAll(
 						wait.ForAll(
 							wait.ForLog("ready for start up"),
 							wait.ForHTTP("/").WithPort("80"),
-						),
-						120*time.Second,
-					),
+						)).WithDeadline(
+
+						120*time.Second)),
 				)
 				if err != nil {
 					b.Fatal(err)

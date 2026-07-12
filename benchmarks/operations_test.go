@@ -27,7 +27,7 @@ func BenchmarkStop(b *testing.B) {
 				b.StopTimer()
 				c, err := applecontainer.Run(ctx, img,
 					applecontainer.WithExposedPorts("80"),
-					applecontainer.WithWaitStrategyAndDeadline(wait.ForLog("ready for start up"), 120*time.Second),
+					applecontainer.WithWaitingFor(wait.ForAll(wait.ForLog("ready for start up")).WithDeadline(120*time.Second)),
 				)
 				if err != nil {
 					b.Fatal(err)
@@ -73,7 +73,7 @@ func BenchmarkStart(b *testing.B) {
 				b.StopTimer()
 				c, err := applecontainer.Run(ctx, img,
 					applecontainer.WithExposedPorts("80"),
-					applecontainer.WithWaitStrategyAndDeadline(wait.ForLog("ready for start up"), 120*time.Second),
+					applecontainer.WithWaitingFor(wait.ForAll(wait.ForLog("ready for start up")).WithDeadline(120*time.Second)),
 				)
 				if err != nil {
 					b.Fatal(err)
@@ -120,7 +120,7 @@ func BenchmarkTerminate(b *testing.B) {
 				b.StopTimer()
 				c, err := applecontainer.Run(ctx, img,
 					applecontainer.WithExposedPorts("80"),
-					applecontainer.WithWaitStrategyAndDeadline(wait.ForLog("ready for start up"), 120*time.Second),
+					applecontainer.WithWaitingFor(wait.ForAll(wait.ForLog("ready for start up")).WithDeadline(120*time.Second)),
 				)
 				if err != nil {
 					b.Fatal(err)
@@ -160,7 +160,7 @@ func BenchmarkInspect(b *testing.B) {
 			b.StopTimer()
 			c, err := applecontainer.Run(ctx, img,
 				applecontainer.WithExposedPorts("80"),
-				applecontainer.WithWaitStrategyAndDeadline(wait.ForLog("ready for start up"), 120*time.Second),
+				applecontainer.WithWaitingFor(wait.ForAll(wait.ForLog("ready for start up")).WithDeadline(120*time.Second)),
 			)
 			if err != nil {
 				b.Fatal(err)
@@ -205,7 +205,7 @@ func BenchmarkExec(b *testing.B) {
 			b.StopTimer()
 			c, err := applecontainer.Run(ctx, img,
 				applecontainer.WithExposedPorts("80"),
-				applecontainer.WithWaitStrategyAndDeadline(wait.ForLog("ready for start up"), 120*time.Second),
+				applecontainer.WithWaitingFor(wait.ForAll(wait.ForLog("ready for start up")).WithDeadline(120*time.Second)),
 			)
 			if err != nil {
 				b.Fatal(err)
@@ -265,7 +265,7 @@ func BenchmarkCopyFile1KB(b *testing.B) {
 			b.StopTimer()
 			c, err := applecontainer.Run(ctx, img,
 				applecontainer.WithExposedPorts("80"),
-				applecontainer.WithWaitStrategyAndDeadline(wait.ForLog("ready for start up"), 120*time.Second),
+				applecontainer.WithWaitingFor(wait.ForAll(wait.ForLog("ready for start up")).WithDeadline(120*time.Second)),
 			)
 			if err != nil {
 				b.Fatal(err)
@@ -320,7 +320,7 @@ func BenchmarkCopyFile1MB(b *testing.B) {
 			b.StopTimer()
 			c, err := applecontainer.Run(ctx, img,
 				applecontainer.WithExposedPorts("80"),
-				applecontainer.WithWaitStrategyAndDeadline(wait.ForLog("ready for start up"), 120*time.Second),
+				applecontainer.WithWaitingFor(wait.ForAll(wait.ForLog("ready for start up")).WithDeadline(120*time.Second)),
 			)
 			if err != nil {
 				b.Fatal(err)
@@ -370,7 +370,7 @@ func BenchmarkCopyFileFromContainer1KB(b *testing.B) {
 			b.StopTimer()
 			c, err := applecontainer.Run(ctx, img,
 				applecontainer.WithExposedPorts("80"),
-				applecontainer.WithWaitStrategyAndDeadline(wait.ForLog("ready for start up"), 120*time.Second),
+				applecontainer.WithWaitingFor(wait.ForAll(wait.ForLog("ready for start up")).WithDeadline(120*time.Second)),
 			)
 			if err != nil {
 				b.Fatal(err)
@@ -440,7 +440,7 @@ func BenchmarkCopyFileFromContainer1MB(b *testing.B) {
 			b.StopTimer()
 			c, err := applecontainer.Run(ctx, img,
 				applecontainer.WithExposedPorts("80"),
-				applecontainer.WithWaitStrategyAndDeadline(wait.ForLog("ready for start up"), 120*time.Second),
+				applecontainer.WithWaitingFor(wait.ForAll(wait.ForLog("ready for start up")).WithDeadline(120*time.Second)),
 			)
 			if err != nil {
 				b.Fatal(err)
@@ -507,7 +507,7 @@ func BenchmarkLogs(b *testing.B) {
 			b.StopTimer()
 			c, err := applecontainer.Run(ctx, img,
 				applecontainer.WithCmd(cmd...),
-				applecontainer.WithWaitStrategyAndDeadline(wait.ForLog("log line output testing performance 10000"), 120*time.Second),
+				applecontainer.WithWaitingFor(wait.ForAll(wait.ForLog("log line output testing performance 10000")).WithDeadline(120*time.Second)),
 			)
 			if err != nil {
 				b.Fatal(err)
@@ -567,7 +567,7 @@ func BenchmarkWaitStrategyLog(b *testing.B) {
 				b.StartTimer()
 				c, err := applecontainer.Run(ctx, img,
 					applecontainer.WithCmd(cmd...),
-					applecontainer.WithWaitStrategyAndDeadline(wait.ForLog("READY"), 120*time.Second),
+					applecontainer.WithWaitingFor(wait.ForAll(wait.ForLog("READY")).WithDeadline(120*time.Second)),
 				)
 				if err != nil {
 					b.Fatal(err)

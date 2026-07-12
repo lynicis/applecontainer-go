@@ -100,30 +100,6 @@ func WithWaitStrategy(s wait.Strategy) ContainerCustomizer {
 	}
 }
 
-// WithWaitStrategyAndDeadline sets the wait strategy and its deadline.
-func WithWaitStrategyAndDeadline(s wait.Strategy, deadline time.Duration) ContainerCustomizer {
-	return func(req *ContainerRequest) error {
-		req.WaitingFor = wait.ForAll(s).WithDeadline(deadline)
-		return nil
-	}
-}
-
-// WithAdditionalWaitStrategy appends an additional wait strategy.
-func WithAdditionalWaitStrategy(s wait.Strategy) ContainerCustomizer {
-	return func(req *ContainerRequest) error {
-		if req.WaitingFor == nil {
-			req.WaitingFor = wait.ForAll(s).WithDeadline(60 * time.Second)
-		} else {
-			if composite, ok := req.WaitingFor.(*wait.ForAllStrategy); ok {
-				composite.Strategies = append(composite.Strategies, s)
-			} else {
-				req.WaitingFor = wait.ForAll(req.WaitingFor, s).WithDeadline(60 * time.Second)
-			}
-		}
-		return nil
-	}
-}
-
 // WithCPUs sets the number of CPUs allocated to the container.
 func WithCPUs(cpus float64) ContainerCustomizer {
 	return func(req *ContainerRequest) error {
@@ -357,21 +333,6 @@ func WithContainerfile(cf FromContainerfile) ContainerCustomizer {
 func WithLogWriters(writers ...io.Writer) ContainerCustomizer {
 	return func(req *ContainerRequest) error {
 		req.LogWriters = append(req.LogWriters, writers...)
-		return nil
-	}
-}
-
-// WithCLIArgsModifier chains or sets custom argument modifiers.
-func WithCLIArgsModifier(modifier CLIArgsModifier) ContainerCustomizer {
-	return func(req *ContainerRequest) error {
-		if req.CLIArgsModifier == nil {
-			req.CLIArgsModifier = modifier
-		} else {
-			oldMod := req.CLIArgsModifier
-			req.CLIArgsModifier = func(args []string) []string {
-				return modifier(oldMod(args))
-			}
-		}
 		return nil
 	}
 }

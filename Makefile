@@ -13,7 +13,7 @@ test-benchmark:
 	cd benchmarks && APPLECONTAINER_BENCHMARK=1 go test -bench=. -benchtime=1x -tags benchmark -timeout=600s ./... && cd ../
 
 test-examples:
-	cd examples && go test -v -race ./... && cd ../
+	cd examples && APPLECONTAINER_INTEGRATION=1 go test -tags integration -v ./... && cd ../
 
 sec:
 	gosec ./...

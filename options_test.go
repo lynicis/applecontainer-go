@@ -39,49 +39,6 @@ func TestWithWaitStrategy(t *testing.T) {
 	}
 }
 
-func TestWithWaitStrategyAndDeadline(t *testing.T) {
-	s := &dummyStrategy{name: "s"}
-	req := &ContainerRequest{}
-
-	if err := WithWaitStrategyAndDeadline(s, 10*time.Second)(req); err != nil {
-		t.Fatal(err)
-	}
-
-	composite, ok := req.WaitingFor.(*wait.ForAllStrategy)
-	if !ok {
-		t.Fatalf("expected ForAllStrategy, got %T", req.WaitingFor)
-	}
-	if len(composite.Strategies) != 1 || composite.Strategies[0] != s {
-		t.Errorf("expected strategies [s], got %v", composite.Strategies)
-	}
-	if composite.Deadline != 10*time.Second {
-		t.Errorf("expected deadline 10s, got %v", composite.Deadline)
-	}
-}
-
-func TestWithCLIArgsModifier(t *testing.T) {
-	req := &ContainerRequest{}
-
-	m1 := func(args []string) []string {
-		return append(args, "m1")
-	}
-	m2 := func(args []string) []string {
-		return append(args, "m2")
-	}
-
-	if err := WithCLIArgsModifier(m1)(req); err != nil {
-		t.Fatal(err)
-	}
-	if err := WithCLIArgsModifier(m2)(req); err != nil {
-		t.Fatal(err)
-	}
-
-	res := req.CLIArgsModifier([]string{"base"})
-	if len(res) != 3 || res[0] != "base" || res[1] != "m1" || res[2] != "m2" {
-		t.Errorf("unexpected modifier chaining: %v", res)
-	}
-}
-
 func TestAllOptions(t *testing.T) {
 	req := &ContainerRequest{}
 	options := []ContainerCustomizer{
@@ -172,38 +129,4 @@ func TestOptionsProper(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, strat, req.WaitingFor)
 
-	req.WaitingFor = nil
-	err = WithAdditionalWaitStrategy(strat)(req)
-	require.NoError(t, err)
-	assert.NotNil(t, req.WaitingFor)
-}
-
-func TestWithAdditionalWaitStrategy(t *testing.T) {
-	s1 := &dummyStrategy{name: "s1"}
-	s2 := &dummyStrategy{name: "s2"}
-	s3 := &dummyStrategy{name: "s3"}
-
-	req := &ContainerRequest{}
-
-	// Case 1: req.WaitingFor == nil
-	err := WithAdditionalWaitStrategy(s1)(req)
-	require.NoError(t, err)
-	composite, ok := req.WaitingFor.(*wait.ForAllStrategy)
-	require.True(t, ok)
-	assert.Len(t, composite.Strategies, 1)
-
-	// Case 2: req.WaitingFor is already ForAllStrategy
-	err = WithAdditionalWaitStrategy(s2)(req)
-	require.NoError(t, err)
-	composite2, ok := req.WaitingFor.(*wait.ForAllStrategy)
-	require.True(t, ok)
-	assert.Len(t, composite2.Strategies, 2)
-
-	// Case 3: req.WaitingFor is NOT ForAllStrategy
-	req.WaitingFor = s3
-	err = WithAdditionalWaitStrategy(s1)(req)
-	require.NoError(t, err)
-	composite3, ok := req.WaitingFor.(*wait.ForAllStrategy)
-	require.True(t, ok)
-	assert.Len(t, composite3.Strategies, 2)
 }

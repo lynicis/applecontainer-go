@@ -5,24 +5,18 @@ import (
 	"fmt"
 )
 
-// Volume represents a container volume.
-type Volume interface {
-	Remove(ctx context.Context) error
-	Name() string
-}
-
-type cliVolume struct {
+type Volume struct {
 	name     string
-	provider *cliProvider
+	provider *Provider
 }
 
 // Name returns the name of the volume.
-func (v *cliVolume) Name() string {
+func (v *Volume) Name() string {
 	return v.name
 }
 
 // Remove deletes the volume via the CLI.
-func (v *cliVolume) Remove(ctx context.Context) error {
+func (v *Volume) Remove(ctx context.Context) error {
 	_, _, _, err := v.provider.runner.Run(ctx, []string{"volume", "delete", v.name}, nil)
 	return err
 }
@@ -40,12 +34,12 @@ func generateVolumeName() string {
 }
 
 // NewVolume creates a volume.
-func NewVolume(ctx context.Context, req VolumeRequest) (Volume, error) {
+func NewVolume(ctx context.Context, req VolumeRequest) (*Volume, error) {
 	if req.Name == "" {
 		req.Name = generateVolumeName()
 	}
 
-	provider := newCLIProvider(Read())
+	provider := newProvider(Read())
 
 	args := []string{"volume", "create"}
 	if req.Size != "" {
@@ -64,7 +58,7 @@ func NewVolume(ctx context.Context, req VolumeRequest) (Volume, error) {
 		return nil, fmt.Errorf("applecontainer: failed to create volume: %w", err)
 	}
 
-	return &cliVolume{
+	return &Volume{
 		name:     req.Name,
 		provider: provider,
 	}, nil

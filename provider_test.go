@@ -37,7 +37,7 @@ func TestCreateContainer(t *testing.T) {
 		},
 	}
 
-	p := &cliProvider{
+	p := &Provider{
 		runner: runner,
 		cfg:    Config{},
 		log:    log.TestLogger(t),
@@ -85,13 +85,13 @@ func TestStartContainer(t *testing.T) {
 		},
 	}
 
-	p := &cliProvider{
+	p := &Provider{
 		runner: runner,
 		cfg:    Config{},
 		log:    log.TestLogger(t),
 	}
 
-	c := &cliContainer{
+	c := &Container{
 		provider: p,
 		id:       fakeCID,
 	}
@@ -123,7 +123,7 @@ func TestStopContainer(t *testing.T) {
 		},
 	}
 
-	p := &cliProvider{
+	p := &Provider{
 		runner: runner,
 		cfg:    Config{},
 		log:    log.TestLogger(t),
@@ -161,54 +161,6 @@ func TestStopContainer(t *testing.T) {
 	}
 }
 
-func TestKillContainer(t *testing.T) {
-	fakeCID := "test-container-id"
-	var capturedArgs []string
-
-	runner := &fakeRunner{
-		runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
-			capturedArgs = args
-			return nil, nil, 0, nil
-		},
-	}
-
-	p := &cliProvider{
-		runner: runner,
-		cfg:    Config{},
-		log:    log.TestLogger(t),
-	}
-
-	// Test kill without signal
-	err := p.KillContainer(context.Background(), fakeCID, "")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	expected1 := []string{"kill", fakeCID}
-	if len(capturedArgs) != len(expected1) {
-		t.Fatalf("expected %d args, got %v", len(expected1), capturedArgs)
-	}
-	for i, v := range capturedArgs {
-		if v != expected1[i] {
-			t.Errorf("got %q, want %q", v, expected1[i])
-		}
-	}
-
-	// Test kill with signal
-	err = p.KillContainer(context.Background(), fakeCID, "SIGUSR1")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	expected2 := []string{"kill", "--signal", "SIGUSR1", fakeCID}
-	if len(capturedArgs) != len(expected2) {
-		t.Fatalf("expected %d args, got %v", len(expected2), capturedArgs)
-	}
-	for i, v := range capturedArgs {
-		if v != expected2[i] {
-			t.Errorf("got %q, want %q", v, expected2[i])
-		}
-	}
-}
-
 func TestDeleteContainer(t *testing.T) {
 	fakeCID := "test-container-id"
 	var capturedArgs []string
@@ -220,7 +172,7 @@ func TestDeleteContainer(t *testing.T) {
 		},
 	}
 
-	p := &cliProvider{
+	p := &Provider{
 		runner: runner,
 		cfg:    Config{},
 		log:    log.TestLogger(t),
@@ -269,7 +221,7 @@ func TestInspectContainer(t *testing.T) {
 		},
 	}
 
-	p := &cliProvider{
+	p := &Provider{
 		runner: runner,
 		cfg:    Config{},
 		log:    log.TestLogger(t),
@@ -310,7 +262,7 @@ func TestContainerLogs(t *testing.T) {
 			},
 		}
 
-		p := &cliProvider{
+		p := &Provider{
 			runner: runner,
 			cfg:    Config{},
 			log:    log.TestLogger(t),
@@ -357,7 +309,7 @@ func TestContainerLogs(t *testing.T) {
 			},
 		}
 
-		p := &cliProvider{
+		p := &Provider{
 			runner: runner,
 			cfg:    Config{},
 			log:    log.TestLogger(t),
@@ -408,7 +360,7 @@ func TestExecContainer(t *testing.T) {
 		},
 	}
 
-	p := &cliProvider{
+	p := &Provider{
 		runner: runner,
 		cfg:    Config{},
 		log:    log.TestLogger(t),
@@ -483,7 +435,7 @@ func TestCopyToContainer(t *testing.T) {
 		},
 	}
 
-	p := &cliProvider{
+	p := &Provider{
 		runner: runner,
 		cfg:    Config{},
 		log:    log.TestLogger(t),
@@ -526,7 +478,7 @@ func TestCopyFileFromContainer(t *testing.T) {
 		},
 	}
 
-	p := &cliProvider{
+	p := &Provider{
 		runner: runner,
 		cfg:    Config{},
 		log:    log.TestLogger(t),
@@ -577,142 +529,13 @@ func TestCopyFileFromContainer(t *testing.T) {
 	}
 }
 
-func TestImagePull(t *testing.T) {
-	var capturedArgs []string
-	runner := &fakeRunner{
-		runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
-			capturedArgs = args
-			return nil, nil, 0, nil
-		},
-	}
-
-	p := &cliProvider{
-		runner: runner,
-		cfg:    Config{},
-		log:    log.TestLogger(t),
-	}
-
-	err := p.ImagePull(context.Background(), "nginx:latest")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	expectedArgs := []string{"image", "pull", "--progress", "plain", "nginx:latest"}
-	if len(capturedArgs) != len(expectedArgs) {
-		t.Fatalf("expected %d args, got %v", len(expectedArgs), capturedArgs)
-	}
-	for i, v := range capturedArgs {
-		if v != expectedArgs[i] {
-			t.Errorf("got %q, want %q", v, expectedArgs[i])
-		}
-	}
-}
-
-func TestImageInspect(t *testing.T) {
-	fakeRef := "nginx:latest"
-	mockJSON := `[{"id": "sha256:nginx-id"}]`
-	var capturedArgs []string
-
-	runner := &fakeRunner{
-		runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
-			capturedArgs = args
-			return []byte(mockJSON), nil, 0, nil
-		},
-	}
-
-	p := &cliProvider{
-		runner: runner,
-		cfg:    Config{},
-		log:    log.TestLogger(t),
-	}
-
-	ii, err := p.ImageInspect(context.Background(), fakeRef)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if ii == nil || ii.ID != "sha256:nginx-id" {
-		t.Errorf("expected ID 'sha256:nginx-id', got %v", ii)
-	}
-
-	expectedArgs := []string{"image", "inspect", fakeRef}
-	if len(capturedArgs) != len(expectedArgs) {
-		t.Fatalf("expected %d args, got %v", len(expectedArgs), capturedArgs)
-	}
-	for i, v := range capturedArgs {
-		if v != expectedArgs[i] {
-			t.Errorf("got %q, want %q", v, expectedArgs[i])
-		}
-	}
-}
-
-func TestHealth(t *testing.T) {
-	var capturedCommands [][]string
-
-	runner := &fakeRunner{
-		runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
-			capturedCommands = append(capturedCommands, args)
-			if len(args) == 1 && args[0] == "--version" {
-				return []byte("container version 1.0.0 (build: release, commit: unspeci)\n"), nil, 0, nil
-			}
-			if len(args) == 2 && args[0] == "system" && args[1] == "status" {
-				return []byte("running"), nil, 0, nil
-			}
-			return nil, nil, 0, nil
-		},
-	}
-
-	p := &cliProvider{
-		runner: runner,
-		cfg:    Config{},
-		log:    log.TestLogger(t),
-	}
-
-	err := p.Health(context.Background())
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if len(capturedCommands) != 2 {
-		t.Fatalf("expected 2 commands, got %v", capturedCommands)
-	}
-
-	if capturedCommands[0][0] != "--version" {
-		t.Errorf("expected first command to be --version, got %v", capturedCommands[0])
-	}
-
-	if capturedCommands[1][0] != "system" || capturedCommands[1][1] != "status" {
-		t.Errorf("expected second command to be system status, got %v", capturedCommands[1])
-	}
-}
-
-func TestParseImageInspect(t *testing.T) {
-	// 1. Array
-	ii1, err := parseImageInspect([]byte(`[{"id": "sha256:123"}, {"id": "sha256:ignored"}]`))
-	require.NoError(t, err)
-	assert.Equal(t, "sha256:123", ii1.ID)
-
-	// 2. Object
-	ii2, err := parseImageInspect([]byte(`{"id": "sha256:456"}`))
-	require.NoError(t, err)
-	assert.Equal(t, "sha256:456", ii2.ID)
-
-	// 3. Invalid and empty JSON
-	_, err = parseImageInspect([]byte(`invalid`))
-	assert.ErrorContains(t, err, "failed to parse image inspect JSON")
-	_, err = parseImageInspect([]byte(`[]`))
-	assert.ErrorContains(t, err, "failed to parse image inspect JSON")
-	_, err = parseImageInspect([]byte(`[{"id":"sha256:123"}, invalid]`))
-	assert.ErrorContains(t, err, "failed to parse image inspect JSON")
-}
-
 func TestProviderErrorCases(t *testing.T) {
 	runner := &fakeRunner{
 		runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
 			return nil, nil, 1, errors.New("provider error")
 		},
 	}
-	p := &cliProvider{
+	p := &Provider{
 		runner: runner,
 		log:    log.TestLogger(t),
 	}
@@ -720,21 +543,19 @@ func TestProviderErrorCases(t *testing.T) {
 	_, err := p.CreateContainer(context.Background(), &ContainerRequest{})
 	assert.ErrorContains(t, err, "provider error")
 
-	err = p.StartContainer(context.Background(), &cliContainer{id: "123"})
+	err = p.StartContainer(context.Background(), &Container{id: "123"})
 	assert.ErrorContains(t, err, "provider error")
 
 	_, err = p.InspectContainer(context.Background(), "123")
 	assert.ErrorContains(t, err, "provider error")
 
-	err = p.ImagePull(context.Background(), "img")
 	assert.ErrorContains(t, err, "provider error")
 
-	_, err = p.ImageInspect(context.Background(), "img")
 	assert.ErrorContains(t, err, "provider error")
 }
 
 func TestCopyToContainerErrors(t *testing.T) {
-	p := &cliProvider{runner: &fakeRunner{}}
+	p := &Provider{runner: &fakeRunner{}}
 	err := p.CopyToContainer(context.Background(), "", "/dest", []byte{}, 0644)
 	assert.ErrorContains(t, err, "cannot copy to empty container ID")
 
@@ -743,7 +564,7 @@ func TestCopyToContainerErrors(t *testing.T) {
 			return nil, nil, 1, errors.New("cp fail")
 		},
 	}
-	p2 := &cliProvider{runner: runner}
+	p2 := &Provider{runner: runner}
 	err = p2.CopyToContainer(context.Background(), "id", "/dest", []byte{}, 0644)
 	assert.ErrorContains(t, err, "cp fail")
 }

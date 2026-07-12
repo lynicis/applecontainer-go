@@ -5,24 +5,18 @@ import (
 	"fmt"
 )
 
-// Network represents a container network.
-type Network interface {
-	Remove(ctx context.Context) error
-	Name() string
-}
-
-type cliNetwork struct {
+type Network struct {
 	name     string
-	provider *cliProvider
+	provider *Provider
 }
 
 // Name returns the name of the network.
-func (n *cliNetwork) Name() string {
+func (n *Network) Name() string {
 	return n.name
 }
 
 // Remove deletes the network via the CLI.
-func (n *cliNetwork) Remove(ctx context.Context) error {
+func (n *Network) Remove(ctx context.Context) error {
 	_, _, _, err := n.provider.runner.Run(ctx, []string{"network", "delete", n.name}, nil)
 	return err
 }
@@ -43,12 +37,12 @@ func generateNetworkName() string {
 }
 
 // NewNetwork creates a network.
-func NewNetwork(ctx context.Context, req NetworkRequest) (Network, error) {
+func NewNetwork(ctx context.Context, req NetworkRequest) (*Network, error) {
 	if req.Name == "" {
 		req.Name = generateNetworkName()
 	}
 
-	provider := newCLIProvider(Read())
+	provider := newProvider(Read())
 
 	args := []string{"network", "create"}
 	if req.Driver != "" {
@@ -76,14 +70,14 @@ func NewNetwork(ctx context.Context, req NetworkRequest) (Network, error) {
 		return nil, fmt.Errorf("applecontainer: failed to create network: %w", err)
 	}
 
-	return &cliNetwork{
+	return &Network{
 		name:     req.Name,
 		provider: provider,
 	}, nil
 }
 
 // WithNetwork attaches the container to an existing network with network aliases.
-func WithNetwork(aliases []string, nw Network) ContainerCustomizer {
+func WithNetwork(aliases []string, nw *Network) ContainerCustomizer {
 	return func(req *ContainerRequest) error {
 		req.Networks = append(req.Networks, nw.Name())
 		if req.NetworkAliases == nil {

@@ -3,7 +3,6 @@ package applecontainer
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -11,7 +10,6 @@ import (
 	"os"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/lynicis/applecontainer-go/log"
 )
@@ -26,10 +24,9 @@ var (
 // SessionID returns a stable session identifier for the current test/run process.
 func SessionID() string {
 	sessionOnce.Do(func() {
-		pid := os.Getppid()
-		now := time.Now().UnixNano()
-		hash := sha256.Sum256([]byte(fmt.Sprintf("applecontainer-go:%d:%d", pid, now)))
-		sessionID = hex.EncodeToString(hash[:])
+		b := make([]byte, 16)
+		_, _ = rand.Read(b)
+		sessionID = hex.EncodeToString(b)
 	})
 	return sessionID
 }
@@ -48,7 +45,7 @@ func defaultLogger(_ *ContainerRequest) *slog.Logger {
 }
 
 // Run creates, starts, and waits for a container using customizers.
-func Run(ctx context.Context, img string, opts ...ContainerCustomizer) (*cliContainer, error) {
+func Run(ctx context.Context, img string, opts ...ContainerCustomizer) (*Container, error) {
 	req := &ContainerRequest{Image: img}
 	for _, o := range opts {
 		if err := o(req); err != nil {
@@ -64,7 +61,7 @@ func Run(ctx context.Context, img string, opts ...ContainerCustomizer) (*cliCont
 		return nil, err
 	}
 
-	provider := newCLIProvider(Read())
+	provider := newProvider(Read())
 
 	// 1. Build image if requested
 	if cf := req.FromContainerfile; cf.Context != "" {
@@ -121,7 +118,7 @@ func Run(ctx context.Context, img string, opts ...ContainerCustomizer) (*cliCont
 		return nil, err
 	}
 
-	c := &cliContainer{
+	c := &Container{
 		provider: provider,
 		id:       created.id,
 		image:    req.Image,
@@ -173,7 +170,7 @@ func Run(ctx context.Context, img string, opts ...ContainerCustomizer) (*cliCont
 }
 
 // CleanupContainer registers container termination during test cleanup.
-func CleanupContainer(t testing.TB, c Container) {
+func CleanupContainer(t testing.TB, c *Container) {
 	t.Helper()
 	if c == nil {
 		return
@@ -208,11 +205,7 @@ func GenericLabels() map[string]string {
 
 // randomString generates a cryptographically secure random string with the given prefix.
 func randomString(prefix string) string {
-	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
 	b := make([]byte, 8)
 	_, _ = rand.Read(b)
-	for i := range b {
-		b[i] = letters[int(b[i])%len(letters)]
-	}
-	return prefix + string(b)
+	return prefix + hex.EncodeToString(b)
 }

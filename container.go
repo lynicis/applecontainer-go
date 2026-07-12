@@ -9,35 +9,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/lynicis/applecontainer-go/log"
 	"github.com/lynicis/applecontainer-go/wait"
 )
-
-// Container defines the interface for interacting with a container.
-type Container interface {
-	GetContainerID() string
-	Endpoint(ctx context.Context, port string) (string, error)
-	PortEndpoint(ctx context.Context, port string, proto string) (string, error)
-	Host(context.Context) (string, error)
-	MappedPort(ctx context.Context, port string) (int, error)
-	ContainerIP(context.Context) (string, error)
-	Inspect(context.Context) (*Inspect, error)
-	State(context.Context) (*State, error)
-	IsRunning() bool
-	Start(context.Context) error
-	Stop(context.Context, *time.Duration) error
-	Terminate(ctx context.Context) error
-	Logs(context.Context) (io.ReadCloser, error)
-	Exec(ctx context.Context, cmd []string, opts ...ProcessOption) (int, []byte, error)
-	CopyToContainer(ctx context.Context, content []byte, containerPath string, mode int64) error
-	CopyFileToContainer(ctx context.Context, hostPath, containerPath string, mode int64) error
-	CopyFileFromContainer(ctx context.Context, path string) (io.ReadCloser, error)
-	Networks(context.Context) ([]string, error)
-}
 
 // ContainerRequest represents the parameters for creating a container.
 type ContainerRequest struct {
@@ -79,7 +56,6 @@ type ContainerRequest struct {
 	LogWriters        []io.Writer
 	Cleanups          []func(context.Context) error
 	HostPortMapping   bool
-	CLIArgsModifier   CLIArgsModifier
 }
 
 // FromContainerfile contains options for building an image from a Containerfile.
@@ -137,9 +113,6 @@ type Ulimit struct {
 // WaitingFor is an alias for wait.Strategy.
 type WaitingFor = wait.Strategy
 
-// CLIArgsModifier allows modifying the command line arguments sent to the CLI.
-type CLIArgsModifier func([]string) []string
-
 // Validate validates the container request parameters.
 func (req *ContainerRequest) Validate() error {
 	hasImage := req.Image != ""
@@ -179,32 +152,25 @@ func (req *ContainerRequest) Validate() error {
 	return nil
 }
 
-// cliContainer implements the Container interface.
-type cliContainer struct {
-	provider  *cliProvider
+// Container implements the Container interface.
+type Container struct {
+	provider  *Provider
 	id        string
 	image     string
 	req       ContainerRequest
 	log       *slog.Logger
 	isRunning atomic.Bool
 	logCancel context.CancelFunc
-
-	waitTargetMu          sync.Mutex
-	waitTargetHost        string
-	waitTargetHostCached  bool
-	waitTargetMappedPorts map[string]int
 }
 
-var _ Container = (*cliContainer)(nil)
-
 // GetContainerID returns the ID of the container.
-func (c *cliContainer) GetContainerID() string {
+func (c *Container) GetContainerID() string {
 	return c.id
 }
 
 // Host returns the host address of the container.
 // In HostPortMapping mode, this is "localhost". Otherwise, it is the container's IP.
-func (c *cliContainer) Host(ctx context.Context) (string, error) {
+func (c *Container) Host(ctx context.Context) (string, error) {
 	if c.req.HostPortMapping {
 		return "localhost", nil
 	}
@@ -212,7 +178,7 @@ func (c *cliContainer) Host(ctx context.Context) (string, error) {
 }
 
 // ContainerIP returns the IP address of the container.
-func (c *cliContainer) ContainerIP(ctx context.Context) (string, error) {
+func (c *Container) ContainerIP(ctx context.Context) (string, error) {
 	ins, err := c.Inspect(ctx)
 	if err != nil {
 		return "", err
@@ -228,7 +194,7 @@ func (c *cliContainer) ContainerIP(ctx context.Context) (string, error) {
 }
 
 // MappedPort returns the host-mapped port for the specified container port.
-func (c *cliContainer) MappedPort(ctx context.Context, port string) (int, error) {
+func (c *Container) MappedPort(ctx context.Context, port string) (int, error) {
 	pNum, proto := wait.ParsePort(port)
 	if pNum <= 0 {
 		return 0, fmt.Errorf("applecontainer: invalid port: %s", port)
@@ -249,12 +215,12 @@ func (c *cliContainer) MappedPort(ctx context.Context, port string) (int, error)
 }
 
 // Endpoint returns the endpoint string (host:port) for the specified container port (defaulting to TCP).
-func (c *cliContainer) Endpoint(ctx context.Context, port string) (string, error) {
+func (c *Container) Endpoint(ctx context.Context, port string) (string, error) {
 	return c.PortEndpoint(ctx, port, "")
 }
 
 // PortEndpoint returns the endpoint string (host:port) for the specified container port and protocol.
-func (c *cliContainer) PortEndpoint(ctx context.Context, port string, proto string) (string, error) {
+func (c *Container) PortEndpoint(ctx context.Context, port string, proto string) (string, error) {
 	pNum, parsedProto := wait.ParsePort(port)
 	if proto == "" {
 		proto = parsedProto
@@ -275,12 +241,12 @@ func (c *cliContainer) PortEndpoint(ctx context.Context, port string, proto stri
 }
 
 // Inspect returns the inspect metadata of the container.
-func (c *cliContainer) Inspect(ctx context.Context) (*Inspect, error) {
+func (c *Container) Inspect(ctx context.Context) (*Inspect, error) {
 	return c.provider.InspectContainer(ctx, c.id)
 }
 
 // State returns the state metadata of the container.
-func (c *cliContainer) State(ctx context.Context) (*State, error) {
+func (c *Container) State(ctx context.Context) (*State, error) {
 	ins, err := c.Inspect(ctx)
 	if err != nil {
 		return nil, err
@@ -289,7 +255,7 @@ func (c *cliContainer) State(ctx context.Context) (*State, error) {
 }
 
 // StateStatus returns the container's status string.
-func (c *cliContainer) StateStatus(ctx context.Context) (string, error) {
+func (c *Container) StateStatus(ctx context.Context) (string, error) {
 	s, err := c.State(ctx)
 	if err != nil {
 		return "", err
@@ -298,7 +264,7 @@ func (c *cliContainer) StateStatus(ctx context.Context) (string, error) {
 }
 
 // StateExitCode returns the container's exit code.
-func (c *cliContainer) StateExitCode(ctx context.Context) (int, error) {
+func (c *Container) StateExitCode(ctx context.Context) (int, error) {
 	s, err := c.State(ctx)
 	if err != nil {
 		return 0, err
@@ -307,12 +273,12 @@ func (c *cliContainer) StateExitCode(ctx context.Context) (int, error) {
 }
 
 // IsRunning returns whether the container is running according to local memory state.
-func (c *cliContainer) IsRunning() bool {
+func (c *Container) IsRunning() bool {
 	return c.isRunning.Load()
 }
 
 // Start starts the container.
-func (c *cliContainer) Start(ctx context.Context) error {
+func (c *Container) Start(ctx context.Context) error {
 	err := c.provider.StartContainer(ctx, c)
 	if err != nil {
 		return err
@@ -322,7 +288,7 @@ func (c *cliContainer) Start(ctx context.Context) error {
 }
 
 // Stop stops the container.
-func (c *cliContainer) Stop(ctx context.Context, timeout *time.Duration) error {
+func (c *Container) Stop(ctx context.Context, timeout *time.Duration) error {
 	err := c.provider.StopContainer(ctx, c.id, timeout)
 	if err != nil {
 		return err
@@ -332,7 +298,7 @@ func (c *cliContainer) Stop(ctx context.Context, timeout *time.Duration) error {
 }
 
 // Terminate stops and deletes the container. Terminate is idempotent.
-func (c *cliContainer) Terminate(ctx context.Context) error {
+func (c *Container) Terminate(ctx context.Context) error {
 	log.Printf("Terminating container %s...", c.id)
 	c.isRunning.Store(false)
 	if c.logCancel != nil {
@@ -358,22 +324,22 @@ func (c *cliContainer) Terminate(ctx context.Context) error {
 }
 
 // Logs returns a reader for the container's logs.
-func (c *cliContainer) Logs(ctx context.Context) (io.ReadCloser, error) {
+func (c *Container) Logs(ctx context.Context) (io.ReadCloser, error) {
 	return c.provider.ContainerLogs(ctx, c.id, false, 0)
 }
 
 // Exec executes a command inside the container.
-func (c *cliContainer) Exec(ctx context.Context, cmd []string, opts ...ProcessOption) (int, []byte, error) {
+func (c *Container) Exec(ctx context.Context, cmd []string, opts ...ProcessOption) (int, []byte, error) {
 	return c.provider.ExecContainer(ctx, c.id, cmd, opts...)
 }
 
 // CopyToContainer copies bytes to a path inside the container.
-func (c *cliContainer) CopyToContainer(ctx context.Context, content []byte, containerPath string, mode int64) error {
+func (c *Container) CopyToContainer(ctx context.Context, content []byte, containerPath string, mode int64) error {
 	return c.provider.CopyToContainer(ctx, c.id, containerPath, content, mode)
 }
 
 // CopyFileToContainer copies a host file to a path inside the container.
-func (c *cliContainer) CopyFileToContainer(ctx context.Context, hostPath, containerPath string, mode int64) error {
+func (c *Container) CopyFileToContainer(ctx context.Context, hostPath, containerPath string, mode int64) error {
 	fileMode, err := checkedFileMode(mode)
 	if err != nil {
 		return err
@@ -396,102 +362,11 @@ func (c *cliContainer) CopyFileToContainer(ctx context.Context, hostPath, contai
 }
 
 // CopyFileFromContainer copies a file from the container.
-func (c *cliContainer) CopyFileFromContainer(ctx context.Context, path string) (io.ReadCloser, error) {
+func (c *Container) CopyFileFromContainer(ctx context.Context, path string) (io.ReadCloser, error) {
 	return c.provider.CopyFileFromContainer(ctx, c.id, path)
 }
 
-type waitTarget struct {
-	*cliContainer
-}
-
-func normalizeWaitTargetPortKey(port string) string {
-	pNum, proto := wait.ParsePort(port)
-	if pNum <= 0 {
-		return port
-	}
-	return fmt.Sprintf("%d/%s", pNum, proto)
-}
-
-func (w waitTarget) Host(ctx context.Context) (string, error) {
-	w.waitTargetMu.Lock()
-	if w.waitTargetHostCached {
-		host := w.waitTargetHost
-		w.waitTargetMu.Unlock()
-		return host, nil
-	}
-	w.waitTargetMu.Unlock()
-
-	host, err := w.cliContainer.Host(ctx)
-	if err != nil {
-		return "", err
-	}
-
-	w.waitTargetMu.Lock()
-	if !w.waitTargetHostCached {
-		w.waitTargetHost = host
-		w.waitTargetHostCached = true
-	}
-	host = w.waitTargetHost
-	w.waitTargetMu.Unlock()
-	return host, nil
-}
-
-func (w waitTarget) MappedPort(ctx context.Context, port string) (int, error) {
-	key := normalizeWaitTargetPortKey(port)
-
-	w.waitTargetMu.Lock()
-	if mapped, ok := w.waitTargetMappedPorts[key]; ok {
-		w.waitTargetMu.Unlock()
-		return mapped, nil
-	}
-	w.waitTargetMu.Unlock()
-
-	mapped, err := w.cliContainer.MappedPort(ctx, port)
-	if err != nil {
-		return 0, err
-	}
-
-	w.waitTargetMu.Lock()
-	if w.waitTargetMappedPorts == nil {
-		w.waitTargetMappedPorts = make(map[string]int)
-	}
-	if cached, ok := w.waitTargetMappedPorts[key]; ok {
-		w.waitTargetMu.Unlock()
-		return cached, nil
-	}
-	w.waitTargetMappedPorts[key] = mapped
-	w.waitTargetMu.Unlock()
-	return mapped, nil
-}
-
-func (w waitTarget) Exec(ctx context.Context, cmd []string, opts ...any) (int, []byte, error) {
-	return w.cliContainer.Exec(ctx, cmd)
-}
-
-func (w waitTarget) StateStatus(ctx context.Context) (string, error) {
-	return w.cliContainer.StateStatus(ctx)
-}
-
-func (w waitTarget) StateExitCode(ctx context.Context) (int, error) {
-	return w.cliContainer.StateExitCode(ctx)
-}
-
-func (w waitTarget) StateStatusAndExitCode(ctx context.Context) (string, int, error) {
-	state, err := w.State(ctx)
-	if err != nil {
-		return "", 0, err
-	}
-	return state.Status, state.ExitCode, nil
-}
-
-func (w waitTarget) Logs(ctx context.Context) (io.ReadCloser, error) {
-	return w.provider.ContainerLogs(ctx, w.id, true, 0)
-}
-
-func (w waitTarget) CopyFileFromContainer(ctx context.Context, path string) (io.ReadCloser, error) {
-	return w.cliContainer.CopyFileFromContainer(ctx, path)
-}
-func (c *cliContainer) Networks(ctx context.Context) ([]string, error) {
+func (c *Container) Networks(ctx context.Context) ([]string, error) {
 	ins, err := c.Inspect(ctx)
 	if err != nil {
 		return nil, err
@@ -511,4 +386,12 @@ func isNotFoundError(err error) bool {
 	return strings.Contains(msg, "not found") ||
 		strings.Contains(msg, "no such") ||
 		strings.Contains(msg, "does not exist")
+}
+
+type waitTarget struct {
+	*Container
+}
+
+func (w waitTarget) Exec(ctx context.Context, cmd []string, opts ...any) (int, []byte, error) {
+	return w.Container.Exec(ctx, cmd)
 }

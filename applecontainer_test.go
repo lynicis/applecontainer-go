@@ -42,29 +42,6 @@ func TestCleanupContainer_NilSafe(t *testing.T) {
 	CleanupContainer(t, nil)
 }
 
-type cleanupTrackingContainer struct {
-	Container
-	terminated bool
-}
-
-func (c *cleanupTrackingContainer) Terminate(ctx context.Context) error {
-	c.terminated = true
-	return nil
-}
-
-func TestCleanupContainer_RegistersCleanup(t *testing.T) {
-	tc := &cleanupTrackingContainer{}
-
-	// Create sub-test to trigger cleanup
-	t.Run("SubTest", func(subT *testing.T) {
-		CleanupContainer(subT, tc)
-	})
-
-	if !tc.terminated {
-		t.Error("expected container to be terminated after sub-test cleanup")
-	}
-}
-
 func TestRun_AppliesOptionsAndOrchestrates(t *testing.T) {
 	Reset()
 

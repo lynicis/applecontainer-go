@@ -13,8 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"encoding/json"
-
 	"github.com/lynicis/applecontainer-go/log"
 )
 
@@ -27,44 +25,20 @@ type processOptions struct {
 	Env        []string
 }
 
-// ImageInspect represents metadata of an image.
-type ImageInspect struct {
-	ID string
-}
-
-// ContainerProvider defines the interface for managing container lifecycles.
-type ContainerProvider interface {
-	CreateContainer(ctx context.Context, req *ContainerRequest) (*cliContainer, error)
-	StartContainer(ctx context.Context, c *cliContainer) error
-	StopContainer(ctx context.Context, id string, timeout *time.Duration) error
-	KillContainer(ctx context.Context, id string, signal string) error
-	DeleteContainer(ctx context.Context, id string, force bool) error
-	InspectContainer(ctx context.Context, id string) (*Inspect, error)
-	ContainerLogs(ctx context.Context, id string, follow bool, n int) (io.ReadCloser, error)
-	ExecContainer(ctx context.Context, id string, cmd []string, opts ...ProcessOption) (int, []byte, error)
-	CopyToContainer(ctx context.Context, id, containerPath string, content []byte, mode int64) error
-	CopyFileFromContainer(ctx context.Context, id, path string) (io.ReadCloser, error)
-	ImagePull(ctx context.Context, ref string) error
-	ImageInspect(ctx context.Context, ref string) (*ImageInspect, error)
-	Health(ctx context.Context) error
-}
-
-type cliProvider struct {
+type Provider struct {
 	runner commandRunner
 	cfg    Config
 	log    *slog.Logger
 }
 
-var _ ContainerProvider = (*cliProvider)(nil)
-
 var providerRunnerOverride commandRunner
 
-func newCLIProvider(cfg Config) *cliProvider {
+func newProvider(cfg Config) *Provider {
 	runner := cfg.runner()
 	if providerRunnerOverride != nil {
 		runner = providerRunnerOverride
 	}
-	return &cliProvider{
+	return &Provider{
 		runner: runner,
 		cfg:    cfg,
 		log:    log.Default(),
@@ -72,7 +46,7 @@ func newCLIProvider(cfg Config) *cliProvider {
 }
 
 // CreateContainer creates a container but does not start it.
-func (p *cliProvider) CreateContainer(ctx context.Context, req *ContainerRequest) (*cliContainer, error) {
+func (p *Provider) CreateContainer(ctx context.Context, req *ContainerRequest) (*Container, error) {
 	tmpFile, err := os.CreateTemp("", "applecontainer-cid-*")
 	if err != nil {
 		return nil, fmt.Errorf("applecontainer: failed to create cidfile: %w", err)
@@ -101,14 +75,14 @@ func (p *cliProvider) CreateContainer(ctx context.Context, req *ContainerRequest
 		return nil, fmt.Errorf("applecontainer: cidfile is empty")
 	}
 
-	return &cliContainer{
+	return &Container{
 		provider: p,
 		id:       cid,
 	}, nil
 }
 
 // StartContainer starts a created container.
-func (p *cliProvider) StartContainer(ctx context.Context, c *cliContainer) error {
+func (p *Provider) StartContainer(ctx context.Context, c *Container) error {
 	if c == nil || c.id == "" {
 		return fmt.Errorf("applecontainer: cannot start nil or empty container ID")
 	}
@@ -120,7 +94,7 @@ func (p *cliProvider) StartContainer(ctx context.Context, c *cliContainer) error
 }
 
 // StopContainer stops a running container.
-func (p *cliProvider) StopContainer(ctx context.Context, id string, timeout *time.Duration) error {
+func (p *Provider) StopContainer(ctx context.Context, id string, timeout *time.Duration) error {
 	if id == "" {
 		return fmt.Errorf("applecontainer: cannot stop empty container ID")
 	}
@@ -135,25 +109,8 @@ func (p *cliProvider) StopContainer(ctx context.Context, id string, timeout *tim
 	return nil
 }
 
-// KillContainer sends a signal to a container.
-func (p *cliProvider) KillContainer(ctx context.Context, id string, signal string) error {
-	if id == "" {
-		return fmt.Errorf("applecontainer: cannot kill empty container ID")
-	}
-	args := []string{"kill"}
-	if signal != "" {
-		args = append(args, "--signal", signal)
-	}
-	args = append(args, id)
-	_, _, _, err := p.runner.Run(ctx, args, nil)
-	if err != nil {
-		return fmt.Errorf("applecontainer: kill container %s failed: %w", id, err)
-	}
-	return nil
-}
-
 // DeleteContainer deletes a container.
-func (p *cliProvider) DeleteContainer(ctx context.Context, id string, force bool) error {
+func (p *Provider) DeleteContainer(ctx context.Context, id string, force bool) error {
 	if id == "" {
 		return fmt.Errorf("applecontainer: cannot delete empty container ID")
 	}
@@ -170,7 +127,7 @@ func (p *cliProvider) DeleteContainer(ctx context.Context, id string, force bool
 }
 
 // InspectContainer returns metadata of a container.
-func (p *cliProvider) InspectContainer(ctx context.Context, id string) (*Inspect, error) {
+func (p *Provider) InspectContainer(ctx context.Context, id string) (*Inspect, error) {
 	if id == "" {
 		return nil, fmt.Errorf("applecontainer: cannot inspect empty container ID")
 	}
@@ -202,7 +159,7 @@ func (f *followLogsReadCloser) Close() error {
 }
 
 // ContainerLogs returns reader for container logs.
-func (p *cliProvider) ContainerLogs(ctx context.Context, id string, follow bool, n int) (io.ReadCloser, error) {
+func (p *Provider) ContainerLogs(ctx context.Context, id string, follow bool, n int) (io.ReadCloser, error) {
 	if id == "" {
 		return nil, fmt.Errorf("applecontainer: cannot get logs for empty container ID")
 	}
@@ -234,7 +191,7 @@ func (p *cliProvider) ContainerLogs(ctx context.Context, id string, follow bool,
 }
 
 // ExecContainer executes a command inside a running container.
-func (p *cliProvider) ExecContainer(ctx context.Context, id string, cmd []string, opts ...ProcessOption) (int, []byte, error) {
+func (p *Provider) ExecContainer(ctx context.Context, id string, cmd []string, opts ...ProcessOption) (int, []byte, error) {
 	if id == "" {
 		return -1, nil, fmt.Errorf("applecontainer: cannot exec in empty container ID")
 	}
@@ -271,7 +228,7 @@ func checkedFileMode(mode int64) (os.FileMode, error) {
 	return os.FileMode(uint32(mode)), nil
 }
 
-func (p *cliProvider) copyHostFileToContainer(ctx context.Context, id, hostPath, containerPath string) error {
+func (p *Provider) copyHostFileToContainer(ctx context.Context, id, hostPath, containerPath string) error {
 	if id == "" {
 		return fmt.Errorf("applecontainer: cannot copy to empty container ID")
 	}
@@ -284,7 +241,7 @@ func (p *cliProvider) copyHostFileToContainer(ctx context.Context, id, hostPath,
 }
 
 // CopyToContainer copies data to a path inside a container.
-func (p *cliProvider) CopyToContainer(ctx context.Context, id, containerPath string, content []byte, mode int64) error {
+func (p *Provider) CopyToContainer(ctx context.Context, id, containerPath string, content []byte, mode int64) error {
 	if id == "" {
 		return fmt.Errorf("applecontainer: cannot copy to empty container ID")
 	}
@@ -329,7 +286,7 @@ func (t *tempFileReadCloser) Close() error {
 }
 
 // CopyFileFromContainer copies a file from a container.
-func (p *cliProvider) CopyFileFromContainer(ctx context.Context, id, path string) (io.ReadCloser, error) {
+func (p *Provider) CopyFileFromContainer(ctx context.Context, id, path string) (io.ReadCloser, error) {
 	if id == "" {
 		return nil, fmt.Errorf("applecontainer: cannot copy from empty container ID")
 	}
@@ -363,67 +320,4 @@ func (p *cliProvider) CopyFileFromContainer(ctx context.Context, id, path string
 
 	cleanup = false
 	return &tempFileReadCloser{File: f}, nil
-}
-
-// ImagePull pulls an image from a registry.
-func (p *cliProvider) ImagePull(ctx context.Context, ref string) error {
-	if ref == "" {
-		return fmt.Errorf("applecontainer: cannot pull empty image reference")
-	}
-
-	args := []string{"image", "pull", "--progress", "plain", ref}
-	_, _, _, err := p.runner.Run(ctx, args, nil)
-	if err != nil {
-		return fmt.Errorf("applecontainer: pull image %s failed: %w", ref, err)
-	}
-	return nil
-}
-
-// ImageInspect returns metadata of an image.
-func (p *cliProvider) ImageInspect(ctx context.Context, ref string) (*ImageInspect, error) {
-	if ref == "" {
-		return nil, fmt.Errorf("applecontainer: cannot inspect empty image reference")
-	}
-
-	stdout, _, _, err := p.runner.Run(ctx, []string{"image", "inspect", ref}, nil)
-	if err != nil {
-		return nil, fmt.Errorf("applecontainer: inspect image %s failed: %w", ref, err)
-	}
-
-	ii, err := parseImageInspect(stdout)
-	if err != nil {
-		return nil, err
-	}
-	return ii, nil
-}
-
-func parseImageInspect(data []byte) (*ImageInspect, error) {
-	data = bytes.TrimSpace(data)
-	if len(data) == 0 {
-		return nil, fmt.Errorf("applecontainer: failed to parse image inspect JSON: empty data")
-	}
-
-	if data[0] == '[' {
-		var result [1]ImageInspect
-		if err := json.Unmarshal(data, &result); err == nil && !isEmptyJSONArray(data) {
-			return &result[0], nil
-		}
-	} else {
-		var obj ImageInspect
-		if err := json.Unmarshal(data, &obj); err == nil {
-			return &obj, nil
-		}
-	}
-	return nil, fmt.Errorf("applecontainer: failed to parse image inspect JSON")
-}
-
-// Health checks the health of the container provider.
-func (p *cliProvider) Health(ctx context.Context) error {
-	if _, err := checkVersion(ctx, p.runner); err != nil {
-		return fmt.Errorf("applecontainer: health check failed: version check: %w", err)
-	}
-	if _, _, _, err := p.runner.Run(ctx, []string{"system", "status"}, nil); err != nil {
-		return fmt.Errorf("applecontainer: health check failed: system status check: %w", err)
-	}
-	return nil
 }

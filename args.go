@@ -156,10 +156,5 @@ func buildCreateArgs(req *ContainerRequest, cidFile string) ([]string, error) {
 	if len(req.Cmd) > 0 {
 		args = append(args, req.Cmd...)
 	}
-
-	if req.CLIArgsModifier != nil {
-		args = req.CLIArgsModifier(args)
-	}
-
 	return args, nil
 }

@@ -60,7 +60,7 @@ func TestNetworkOptionsProper(t *testing.T) {
 	assert.NotEmpty(t, name)
 
 	req := &ContainerRequest{}
-	nw := &cliNetwork{name: "fake"}
+	nw := &Network{name: "fake"}
 
 	customizer := WithNetwork([]string{"alias"}, nw)
 	err := customizer(req)

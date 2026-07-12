@@ -9,9 +9,9 @@ import (
 func TestTestingProper(t *testing.T) {
 	CleanupNetwork(t, nil)
 
-	nw := &cliNetwork{
+	nw := &Network{
 		name: "test-nw",
-		provider: &cliProvider{
+		provider: &Provider{
 			runner: &fakeRunner{
 				runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
 					return nil, nil, 0, nil
