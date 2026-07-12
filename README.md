@@ -12,6 +12,7 @@ Unlike Docker-based libraries, `applecontainer-go` integrates directly with the 
 
 ## Table of Contents
 
+- [Documentation](#documentation)
 - [Features](#features)
 - [Prerequisites](#prerequisites)
 - [Install](#install)
@@ -28,6 +29,14 @@ Unlike Docker-based libraries, `applecontainer-go` integrates directly with the 
 - [Testing and Verification](#testing-and-verification)
 - [Contributing](#contributing)
 - [License](#license)
+
+---
+
+## Documentation
+
+Interactive documentation:
+
+**[https://gistcdn.githack.com/lynicis/1b74df1662a9c68ebfd7cc76c5077578/raw/639ef50a24db1e71ea89d2b2608ea226f48fd969/index.html](https://gistcdn.githack.com/lynicis/1b74df1662a9c68ebfd7cc76c5077578/raw/639ef50a24db1e71ea89d2b2608ea226f48fd969/index.html)**
 
 ---
 
