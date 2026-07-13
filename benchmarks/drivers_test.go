@@ -9,9 +9,11 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/lib/pq"
+	applecontainer "github.com/lynicis/applecontainer-go"
+	"github.com/lynicis/applecontainer-go/wait"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
-	"github.com/testcontainers/testcontainers-go/wait"
+	wait2 "github.com/testcontainers/testcontainers-go/wait"
 	gormpg "gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -25,49 +27,81 @@ func (BenchModel) TableName() string {
 	return "bench_models"
 }
 
-func setupDB(t testing.TB) (string, func()) {
-	ctx := context.Background()
-	pgContainer, err := postgres.Run(ctx,
-		"postgres:15-alpine",
-		postgres.WithDatabase("bench"),
-		postgres.WithUsername("bench"),
-		postgres.WithPassword("bench"),
-		testcontainers.WithWaitStrategy(
-			wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2).WithStartupTimeout(5*time.Second),
-		),
-	)
-	if err != nil {
-		t.Fatalf("failed to start postgres: %v", err)
-	}
+func setupPostgres(t testing.TB, rt Runtime) (string, func()) {
+	t.Helper()
 
-	connStr, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
-	if err != nil {
-		t.Fatalf("failed to get connection string: %v", err)
-	}
+	switch rt {
+	case AppleContainer:
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
 
-	// Create table
-	db, err := sql.Open("postgres", connStr)
-	if err != nil {
-		t.Fatalf("failed to open pq: %v", err)
-	}
-	defer func() { _ = db.Close() }()
-	_, err = db.Exec("CREATE TABLE bench_models (id SERIAL PRIMARY KEY, val TEXT)")
-	if err != nil {
-		t.Fatalf("failed to create table: %v", err)
-	}
-
-	return connStr, func() {
-		if err := pgContainer.Terminate(context.Background()); err != nil {
-			t.Fatalf("failed to terminate container: %v", err)
+		c, err := applecontainer.Run(ctx, "postgres:15-alpine",
+			applecontainer.WithExposedPorts("5432"),
+			applecontainer.WithEnv(map[string]string{
+				"POSTGRES_DB":       "bench",
+				"POSTGRES_USER":     "bench",
+				"POSTGRES_PASSWORD": "bench",
+			}),
+			applecontainer.WithWaitingFor(
+				wait.ForLog("database system is ready to accept connections").
+					WithOccurrence(2),
+			),
+		)
+		if err != nil {
+			t.Fatalf("applecontainer postgres: %v", err)
 		}
+		endpoint, err := c.Endpoint(ctx, "5432")
+		if err != nil {
+			t.Fatalf("applecontainer endpoint: %v", err)
+		}
+		connStr := fmt.Sprintf("postgres://bench:bench@%s/bench?sslmode=disable", endpoint)
+
+		// Create table
+		db, err := sql.Open("postgres", connStr)
+		if err != nil {
+			t.Fatalf("sql open: %v", err)
+		}
+		defer db.Close()
+		if _, err := db.Exec("CREATE TABLE bench_models (id SERIAL PRIMARY KEY, val TEXT)"); err != nil {
+			t.Fatalf("create table: %v", err)
+		}
+		return connStr, func() { _ = c.Terminate(context.Background()) }
+
+	case TestcontainersGo:
+		pgContainer, err := postgres.Run(context.Background(), "postgres:15-alpine",
+			postgres.WithDatabase("bench"),
+			postgres.WithUsername("bench"),
+			postgres.WithPassword("bench"),
+			testcontainers.WithWaitStrategy(
+				wait2.ForLog("database system is ready to accept connections").
+					WithOccurrence(2).WithStartupTimeout(30*time.Second),
+			),
+		)
+		if err != nil {
+			t.Fatalf("tc postgres: %v", err)
+		}
+		connStr, err := pgContainer.ConnectionString(context.Background(), "sslmode=disable")
+		if err != nil {
+			t.Fatalf("conn string: %v", err)
+		}
+
+		// Create table
+		db, err := sql.Open("postgres", connStr)
+		if err != nil {
+			t.Fatalf("sql open: %v", err)
+		}
+		defer db.Close()
+		if _, err := db.Exec("CREATE TABLE bench_models (id SERIAL PRIMARY KEY, val TEXT)"); err != nil {
+			t.Fatalf("create table: %v", err)
+		}
+		return connStr, func() { _ = pgContainer.Terminate(context.Background()) }
 	}
+	panic("unreachable")
 }
 
-func BenchmarkDrivers(b *testing.B) {
-	connStr, teardown := setupDB(b)
-	defer teardown()
-
+// runDriverBenchmarks exercises pgx, database/sql (lib/pq), and GORM against a Postgres connStr.
+// Pre-condition: the bench_models table already exists.
+func runDriverBenchmarks(b *testing.B, connStr string) {
 	ctx := context.Background()
 
 	// 1. pgx setup
@@ -255,7 +289,6 @@ func BenchmarkDrivers(b *testing.B) {
 	})
 
 	// Delete
-	// Pre-insert for deletes to not run out of rows
 	b.Run("pgx-delete", func(b *testing.B) {
 		b.StopTimer()
 		for i := 0; i < b.N; i++ {
@@ -290,5 +323,18 @@ func BenchmarkDrivers(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			_ = gormDB.Exec("DELETE FROM bench_models WHERE id = (SELECT id FROM bench_models LIMIT 1)")
 		}
+	})
+}
+
+func BenchmarkDrivers(b *testing.B) {
+	if b.N < 1 {
+		return
+	}
+
+	RunWithBoth(b, func(b *testing.B, rt Runtime) {
+		prePull(b, rt, "postgres:15-alpine")
+		connStr, teardown := setupPostgres(b, rt)
+		defer teardown()
+		runDriverBenchmarks(b, connStr)
 	})
 }
