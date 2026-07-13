@@ -1,11 +1,12 @@
 {
+  "$schema": "https://opencode.ai/config.json",
   "mcp": {
     "gitnexus": {
       "type": "local",
       "command": [
         "bunx",
         "-y",
-        "gitnexus@latest",
+        "gitnexus",
         "mcp"
       ]
     }

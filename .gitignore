@@ -1,3 +1,6 @@
 main
 coverage.out
 coverage.html
+.omo/
+.codegraph/
+.gitnexus/
