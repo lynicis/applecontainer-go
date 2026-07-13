@@ -3,6 +3,7 @@ package wait
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -100,29 +101,26 @@ func (s *HTTPStrategy) WaitUntilReady(ctx context.Context, target StrategyTarget
 		Timeout:   2 * time.Second,
 	}
 
+	host, err := target.Host(ctx)
+	if err != nil {
+		return fmt.Errorf("wait/http: resolve host: %w", err)
+	}
+	mappedPort, err := target.MappedPort(ctx, s.Port)
+	if err != nil {
+		return fmt.Errorf("wait/http: resolve port %s: %w", s.Port, err)
+	}
+	scheme := "http"
+	if s.UseTLS {
+		scheme = "https"
+	}
+	endpoint := (&url.URL{
+		Scheme: scheme,
+		Host:   net.JoinHostPort(host, strconv.Itoa(mappedPort)),
+		Path:   s.Path,
+	}).String()
+
 	checkReady := func() bool {
-		host, err := target.Host(ctx)
-		if err != nil {
-			return false
-		}
-
-		mappedPort, err := target.MappedPort(ctx, s.Port)
-		if err != nil {
-			return false
-		}
-
-		scheme := "http"
-		if s.UseTLS {
-			scheme = "https"
-		}
-
-		u := url.URL{
-			Scheme: scheme,
-			Host:   net.JoinHostPort(host, strconv.Itoa(mappedPort)),
-			Path:   s.Path,
-		}
-
-		req, err := http.NewRequestWithContext(ctx, s.Method, u.String(), nil)
+		req, err := http.NewRequestWithContext(ctx, s.Method, endpoint, nil)
 		if err != nil {
 			return false
 		}

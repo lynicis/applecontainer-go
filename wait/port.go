@@ -36,18 +36,17 @@ func (s *PortStrategy) WaitUntilReady(ctx context.Context, target StrategyTarget
 		return fmt.Errorf("invalid port specification: %s", s.Port)
 	}
 
+	host, err := target.Host(ctx)
+	if err != nil {
+		return fmt.Errorf("wait/port: resolve host: %w", err)
+	}
+	mappedPort, err := target.MappedPort(ctx, s.Port)
+	if err != nil {
+		return fmt.Errorf("wait/port: resolve port %s: %w", s.Port, err)
+	}
+	address := net.JoinHostPort(host, strconv.Itoa(mappedPort))
+
 	checkReady := func() bool {
-		host, err := target.Host(ctx)
-		if err != nil {
-			return false
-		}
-
-		mappedPort, err := target.MappedPort(ctx, s.Port)
-		if err != nil {
-			return false
-		}
-
-		address := net.JoinHostPort(host, strconv.Itoa(mappedPort))
 		dialer := net.Dialer{}
 		conn, err := dialer.DialContext(ctx, proto, address)
 		if err != nil {

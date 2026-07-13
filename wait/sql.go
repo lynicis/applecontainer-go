@@ -3,6 +3,7 @@ package wait
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"time"
 )
 
@@ -40,17 +41,16 @@ func ForSQL(port string, driver string, dburl func(host string, port int) string
 
 // WaitUntilReady opens a DB connection and pings/queries it repeatedly until success, or times out.
 func (s *SQLStrategy) WaitUntilReady(ctx context.Context, target StrategyTarget) error {
+	host, err := target.Host(ctx)
+	if err != nil {
+		return fmt.Errorf("wait/sql: resolve host: %w", err)
+	}
+	mappedPort, err := target.MappedPort(ctx, s.Port)
+	if err != nil {
+		return fmt.Errorf("wait/sql: resolve port %s: %w", s.Port, err)
+	}
+
 	checkReady := func() bool {
-		host, err := target.Host(ctx)
-		if err != nil {
-			return false
-		}
-
-		mappedPort, err := target.MappedPort(ctx, s.Port)
-		if err != nil {
-			return false
-		}
-
 		db, err := sql.Open(s.Driver, s.DBURL(host, mappedPort))
 		if err != nil {
 			return false

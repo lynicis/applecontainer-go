@@ -392,6 +392,19 @@ type waitTarget struct {
 	*Container
 }
 
+func (w waitTarget) Logs(ctx context.Context) (io.ReadCloser, error) {
+	return w.provider.ContainerLogs(ctx, w.id, true, 0)
+}
+
 func (w waitTarget) Exec(ctx context.Context, cmd []string, opts ...any) (int, []byte, error) {
 	return w.Container.Exec(ctx, cmd)
+}
+
+// State returns status and exit code from a single Inspect.
+func (w waitTarget) State(ctx context.Context) (string, int, error) {
+	s, err := w.Container.State(ctx)
+	if err != nil {
+		return "", 0, err
+	}
+	return s.Status, s.ExitCode, nil
 }

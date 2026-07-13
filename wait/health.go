@@ -35,16 +35,8 @@ func (s *HealthStrategy) WaitUntilReady(ctx context.Context, target StrategyTarg
 			return err == nil && status == "running" && code == 0
 		}
 
-		status, err := target.StateStatus(ctx)
-		if err != nil {
-			return false
-		}
-
-		code, err := target.StateExitCode(ctx)
-		if err != nil {
-			return false
-		}
-		return status == "running" && code == 0
+		status, code, err := target.State(ctx)
+		return err == nil && status == "running" && code == 0
 	}
 
 	ticker := time.NewTicker(s.PollInterval)

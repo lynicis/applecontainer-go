@@ -16,6 +16,7 @@ type StrategyTarget interface {
 	MappedPort(ctx context.Context, port string) (int, error)
 	Logs(ctx context.Context) (io.ReadCloser, error)
 	Exec(ctx context.Context, cmd []string, opts ...any) (int, []byte, error)
+	State(ctx context.Context) (status string, exitCode int, err error)
 	StateStatus(ctx context.Context) (string, error)
 	StateExitCode(ctx context.Context) (int, error)
 	CopyFileFromContainer(ctx context.Context, path string) (io.ReadCloser, error)

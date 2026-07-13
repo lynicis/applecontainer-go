@@ -25,6 +25,7 @@ type fakeTarget struct {
 	mappedPortFunc func(ctx context.Context, port string) (int, error)
 	logsFunc       func(ctx context.Context) (io.ReadCloser, error)
 	execFunc       func(ctx context.Context, cmd []string, opts ...any) (int, []byte, error)
+	stateFunc      func(ctx context.Context) (string, int, error)
 	statusFunc     func(ctx context.Context) (string, error)
 	exitCodeFunc   func(ctx context.Context) (int, error)
 	copyFileFunc   func(ctx context.Context, path string) (io.ReadCloser, error)
@@ -56,6 +57,21 @@ func (f *fakeTarget) Exec(ctx context.Context, cmd []string, opts ...any) (int, 
 		return f.execFunc(ctx, cmd, opts...)
 	}
 	return 0, nil, nil
+}
+
+func (f *fakeTarget) State(ctx context.Context) (string, int, error) {
+	if f.stateFunc != nil {
+		return f.stateFunc(ctx)
+	}
+	status, err := f.StateStatus(ctx)
+	if err != nil {
+		return "", 0, err
+	}
+	code, err := f.StateExitCode(ctx)
+	if err != nil {
+		return "", 0, err
+	}
+	return status, code, nil
 }
 
 func (f *fakeTarget) StateStatus(ctx context.Context) (string, error) {
