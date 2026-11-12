@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added a `make fmt` target backed by golangci-lint formatting
+
+### Changed
+- Adopted the Go 1.27 toolchain and pinned golangci-lint and gosec as Go tool dependencies
+- Rewrote the README and AGENTS developer guide to reflect the current architecture and workflows
+
+### Removed
+- Removed assistant-specific configuration files and bundled gitnexus skill documentation
 ## [0.2.0] - 2026-07-07
 
 ### Added

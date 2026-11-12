@@ -1,6 +1,4 @@
+.DS_Store
 main
 coverage.out
 coverage.html
-.omo/
-.codegraph/
-.gitnexus/

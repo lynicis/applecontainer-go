@@ -1,78 +1,100 @@
-# 🍎 applecontainer-go — Agent Developer Guide
+# Repository Guidelines
 
-Welcome to the **applecontainer-go** codebase. This guide outlines key workflows, testing protocols, and code intelligence tools for agentic development.
+## Project Overview
 
-**Architecture Note:** This project was recently refactored to remove complex abstractions (e.g. multi-phase lifecycle hooks, pub/sub log fanouts). Favor imperative, standard Go patterns (like standard `io.Writer` and sequential execution) when adding new features. Keep the core lean.
+`applecontainer-go` is a `testcontainers-go`-style Go library for spinning up Linux containers through the **Apple native `container` CLI** on Apple Silicon macOS (26+). No Docker API, no daemon socket: every operation is an `os/exec` of the `container` binary, and all output is parsed from JSON or exit codes.
 
----
+Module: `github.com/lynicis/applecontainer-go`; package name: `applecontainer`.
 
-## 🛠️ Development & Validation Commands
+## Architecture & Data Flow
 
-Use these commands to build, lint, and test your changes:
+Root package `applecontainer`; three subpackages: `wait/` (readiness strategies), `log/` (slog wrappers), plus separate Go modules `benchmarks/` and `examples/`.
 
-### Build & Lint
-- **Build the project:**
-  ```bash
-  go build ./...
-  ```
-- **Run the linter:**
-  ```bash
-  golangci-lint run
-  ```
+```
+Run(ctx, img, opts...)            applecontainer.go
+  └─ ContainerCustomizer → *ContainerRequest   options.go
+  └─ req.Validate()                             container.go
+  └─ Config.Read() + VersionCheck (once)        config.go
+  └─ Provider                                    provider.go
+       └─ buildCreateArgs → []string             args.go
+       └─ commandRunner.Run/Start                cli.go  ← only exec seam
+       └─ container create → start → inspect JSON
+  └─ waitTarget + wait.Strategy.WaitUntilReady  wait/
+```
 
-### Testing
-- **Run unit tests** (mocked, no runtime dependency):
-  ```bash
-  go test ./...
-  ```
-- **Run integration tests** (requires Apple native container runtime):
-  ```bash
-  APPLECONTAINER_INTEGRATION=1 go test -tags integration -v ./examples/...
-  ```
+- `Run` (`applecontainer.go:48`) is the one-shot entry point; `ContainerRequest` (`container.go`) is the declarative spec; `Provider` (`provider.go`) is the CLI verb set; `Container` is a thin facade delegating everything to `Provider`.
+- `commandRunner` (`cli.go:11`) is the **single seam to the `container` binary**. Production impl is `execRunner`; tests inject a fake. Preserve this boundary — never call `os/exec` directly from feature code.
+- `providerRunnerOverride` (`provider.go:29`) lets tests swap the runner for `Run()` itself.
+- Config is read once (`sync.Once`) from `~/.applecontainer.properties`, then overridden by env (`CONTAINER_BINARY`, `CONTAINER_DEBUG`). `Reset()` exists for tests only.
+- Networking has two modes: direct container IP (default, `Host()` = container IP) and host-port mapping (`WithHostPortMapping(true)`, ephemeral ports bound on 127.0.0.1). Port/host resolution goes through `Inspect` JSON — see `Container.Host/Endpoint/MappedPort` (`container.go:173-231`).
+- Concurrency: `sync.Once` for config/version/session id, `atomic.Bool` for the running flag, goroutine + `io.MultiWriter` for log following.
 
----
+## Key Directories
 
-<!-- gitnexus:start -->
-# GitNexus — Code Intelligence
+| Path | Purpose |
+| :--- | :--- |
+| `.` (root) | Library: container lifecycle, options, networking, volumes, inspect decoding |
+| `wait/` | `wait.Strategy` interface + `ForListeningPort`, `ForHTTP`, `ForLog`, `ForExec`, `ForSQL`, `ForFile`, `ForHealth`, `ForExit`, `ForAll`, `ForAny` |
+| `log/` | `slog` default logger + `log.TestLogger(t)` discard logger |
+| `benchmarks/` | **Separate Go module**; head-to-head vs `testcontainers-go` |
+| `examples/` | **Separate Go module**; `//go:build integration` end-to-end tests |
+| `testdata/` | `inspect*.json` fixtures for parser tests |
 
-This project is indexed by GitNexus as **applecontainers-go** (818 symbols, 2668 relationships, 39 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+## Development Commands
 
-> Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
+```bash
+make test            # go test -race ./...                  (hermetic, no container runtime needed)
+make test-coverage   # go test -v -race -coverprofile=coverage.txt ./...
+make lint            # go tool golangci-lint run ./...
+make fmt             # go tool golangci-lint fmt ./...
+make sec             # go tool gosec ./...
+make test-examples   # cd examples && APPLECONTAINER_INTEGRATION=1 go test -tags integration -v ./...
+make test-benchmark  # cd benchmarks && APPLECONTAINER_BENCHMARK=1 go test -bench=. -benchtime=1x -tags benchmark -timeout=600s ./...
+```
 
-## Always Do
+`golangci-lint` and `gosec` are pinned in the `tool` block of `go.mod` (`go.mod:257`), but the Makefile calls the bare binaries and its `golangci-lint = "go tool ..."` variables are never expanded — so `make lint` / `make sec` need them on `PATH`, or run `go tool github.com/golangci/golangci-lint/v2/cmd/golangci-lint run ./...` directly.
 
-- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
-- **MUST run `detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows. For regression review, compare against the default branch: `detect_changes({scope: "compare", base_ref: "master"})`.
-- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
-- When exploring unfamiliar code, use `query({search_query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
-- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `context({name: "symbolName"})`.
-- For security review, `explain({target: "fileOrSymbol"})` lists taint findings (source→sink flows; needs `analyze --pdg`).
+## Code Conventions & Common Patterns
 
-## Never Do
+- **Functional options**: `ContainerCustomizer func(*ContainerRequest) error`. `WithXxx` mutates the request; maps are *merged*, slices *appended*. `ProcessOption` (in `exec.go`) is the exec-only equivalent.
+- **Errors**: `fmt.Errorf("applecontainer: <verb> ...: %w", err)` — always wrapped, lower-case after the prefix. `runError` (`cli.go:69`) carries bin/args/exit code/stderr. No exported sentinel errors; not-found detection is string matching (`isNotFoundError`).
+- **Context**: first parameter of every public method; passed to `exec.CommandContext` so cancellation kills the CLI. Only log followers and `t.Cleanup` use `context.Background()`.
+- **Logging**: use the internal `log` package (`log.Printf`, `log.Default()`), never `fmt.Println`. Per-instance `*slog.Logger` fields exist but are mostly vestigial.
+- **Temp files**: cidfile and copy staging use `os.CreateTemp` with deferred cleanup and `checkedFileMode` for host modes.
+- **JSON**: struct tags are camelCase to match the CLI schema; the inspect root type is `Configuration` (renamed to avoid clashing with library `Config`). Add fixtures in `testdata/` and parse tests in `inspect_test.go`.
+- **Naming**: `WithXxx` options, `NewXxx` resource constructors, `GetContainerID`/`Name`/`Host`/`Endpoint` getters; internal helpers lowerCamel (`buildCreateArgs`, `parseInspect`).
+- Formatting is `gofmt` + `goimports`; lint enables `misspell` (US locale) on top of golangci-lint defaults.
+- Commits: imperative mood, summary < 50 chars, blank line then body; reference issues. PR template at `.github/pull_request_template.md`.
 
-- NEVER edit a function, class, or method without first running `impact` on it.
-- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
-- NEVER rename symbols with find-and-replace — use `rename` which understands the call graph.
-- NEVER commit changes without running `detect_changes()` to check affected scope.
+## Testing & QA
 
-## Resources
+- Root tests are **hermetic**: `fakeRunner` (`config_test.go:14`) implements `commandRunner` and is installed via `providerRunnerOverride` or `&Provider{runner: fake, ...}`. Fake side effects explicitly (e.g. write the cidfile in the `create` test).
+- Style is mixed: stdlib `testing` with `t.Fatalf` in most files; `testify` (`assert`/`require`) in `container_test.go`, `provider_test.go`, `cli_test.go`, `applecontainer_test.go`, `wait/wait_test.go`. Use `require` for preconditions, `assert` for value checks; table-driven subtests where cases multiply (`container_request_test.go`).
+- `wait/` uses `fakeTarget` implementing `StrategyTarget` plus `httptest.Server`, `net.Listen`, and a registered `mockDriver` for SQL — no runtime needed.
+- Anything touching the real CLI belongs in `examples/` behind `//go:build integration` + `APPLECONTAINER_INTEGRATION=1`, and must call `applecontainer.SkipIfProviderNotHealthy(t)` so unsupported machines skip rather than fail. Use `CleanupContainer` / `CleanupNetwork` for teardown.
+- Benchmarks live in the separate `benchmarks/` module, gated by `APPLECONTAINER_BENCHMARK=1`; `RunWithBoth` runs each case against both runtimes.
+- CI (`.github/workflows/ci.yml`): lint + gosec on ubuntu, `make test-coverage` on `macos-latest`, coverage uploaded to Codecov. Integration tests and benchmarks are not in CI.
+- New behavior needs a unit test; new `WithXxx` options or wait strategies also need a README row and, where practical, an `examples/` case.
+- Add user-visible changes under `## [Unreleased]` in `CHANGELOG.md` (Keep a Changelog + SemVer sections: Added/Changed/Removed/Fixed/Security/Documentation).
+- Gotcha: `make test-coverage` writes `coverage.txt`, but `.gitignore` only lists `coverage.out`/`coverage.html` — do not commit the profile.
 
-| Resource | Use for |
-|----------|---------|
-| `gitnexus://repo/applecontainers-go/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/applecontainers-go/clusters` | All functional areas |
-| `gitnexus://repo/applecontainers-go/processes` | All execution flows |
-| `gitnexus://repo/applecontainers-go/process/{name}` | Step-by-step execution trace |
+## Runtime/Tooling Preferences
 
-## CLI
+- Go **1.27** (`go.mod` is the source of truth; `CONTRIBUTING.md` still says 1.26).
+- Runtime target: macOS 26+, Apple Silicon, `container` CLI installed. Unit tests deliberately do not require it.
+- No package manager beyond `go`; no code generation, no build tags in the root package.
+- `make vuln-check` is referenced by `CONTRIBUTING.md` and the PR template but **does not exist** in `Makefile` — use `make sec` and `govulncheck ./...` manually.
 
-| Task | Read this skill file |
-|------|---------------------|
-| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md` |
-| Blast radius / "What breaks if I change X?" | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
-| Trace bugs / "Why is X failing?" | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md` |
-| Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
-| Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
-| Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
+## Important Files
 
-<!-- gitnexus:end -->
+| File | Role |
+| :--- | :--- |
+| `applecontainer.go` | `Run`, `Prune`, `SessionID`, version-check gate |
+| `container.go` | `ContainerRequest`, `Container`, `Validate`, port/host resolution, `waitTarget` |
+| `provider.go` | CLI verb implementations, `Provider`, runner override |
+| `args.go` | `buildCreateArgs` — request → CLI flags |
+| `cli.go` | `commandRunner` seam, `execRunner`, `runError` |
+| `config.go` | `Config`, `Read`, `VersionCheck`, env/properties precedence |
+| `options.go` / `exec.go` | Functional options |
+| `inspect.go` | JSON schema of `container inspect` |
+| `Makefile`, `.golangci.yml`, `.github/workflows/ci.yml` | Build, lint, CI gates |
