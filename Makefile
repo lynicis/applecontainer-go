@@ -1,7 +1,13 @@
 .PHONY: lint test test-coverage test-benchmark test-examples sec
 
+golangci-lint = "go tool github.com/golangci/golangci-lint/v2/cmd/golangci-lint"
+gosec = "go tool github.com/securego/gosec/v2/cmd/gosec"
+
 lint:
 	golangci-lint run ./...
+
+fmt:
+	golangci-lint fmt ./...
 
 test:
 	go test -race ./...
