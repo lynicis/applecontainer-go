@@ -12,10 +12,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Adopted the Go 1.27 toolchain and pinned golangci-lint and gosec as Go tool dependencies
-- Rewrote the README and AGENTS developer guide to reflect the current architecture and workflows
 - `NetworkRequest` no longer takes `Driver` or `EnableIPv6`; `Config.Debug` is gone (the CLI reads `CONTAINER_DEBUG` itself)
 - Containers are no longer created with `--rm`; `Terminate`/`CleanupContainer` remove them and `Prune` clears leftovers
 - `Run` now terminates and deletes the container (running registered cleanups) when any step after create fails, returning a nil container instead of a half-started one
+- Rewrote the README around adopting the library: status, tradeoffs versus the raw `container` CLI, when not to use it, and the `container system start` prerequisite
+- Removed the dead interactive-docs link, the hand-written table of contents, and duplicate contributing steps from the README
+
+### Removed
+- Removed assistant-specific configuration files and bundled gitnexus skill documentation
+- Removed `NetworkRequest.Driver`, `NetworkRequest.EnableIPv6`, `Config.Debug`, `MountTypeTmpfs` and unused logger fields
 
 ### Fixed
 - Create flags now cover DNS, DNS domain, DNS search, `--no-dns`, ulimits and network aliases
@@ -31,11 +36,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `WithEntrypoint` keeps the entrypoint arguments after the program
 - `HostPorts` accepts both `"80"` and `"80/tcp"` keys
 - `wait.ForHTTP` preserves query strings in the path
-
-### Removed
-- Removed assistant-specific configuration files and bundled gitnexus skill documentation
-- Removed `NetworkRequest.Driver`, `NetworkRequest.EnableIPv6`, `Config.Debug`, `MountTypeTmpfs` and unused logger fields
-
 ## [0.2.0] - 2026-07-07
 
 ### Added
