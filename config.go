@@ -17,7 +17,6 @@ import (
 // Read once (sync.Once) from ~/.applecontainer.properties + env on first use.
 type Config struct {
 	BinaryPath string
-	Debug      bool
 }
 
 var (
@@ -47,6 +46,7 @@ func Read() Config {
 func Reset() {
 	configOnce = sync.Once{}
 	configVal = Config{}
+	resetVersionCheck()
 }
 
 func readConfig() Config {
@@ -83,8 +83,6 @@ func applyProperties(c *Config, content string) {
 		switch k {
 		case "container.binary.path":
 			c.BinaryPath = v
-		case "container.debug":
-			c.Debug = parseBool(v)
 		}
 	}
 }
@@ -93,14 +91,6 @@ func applyEnv(c *Config) {
 	if v, ok := os.LookupEnv("CONTAINER_BINARY"); ok {
 		c.BinaryPath = v
 	}
-	if v, ok := os.LookupEnv("CONTAINER_DEBUG"); ok {
-		c.Debug = parseBool(v)
-	}
-}
-
-func parseBool(s string) bool {
-	b, _ := strconv.ParseBool(strings.TrimSpace(s))
-	return b
 }
 
 // runner returns the commandRunner used to invoke the container binary.

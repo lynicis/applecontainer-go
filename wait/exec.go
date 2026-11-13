@@ -57,21 +57,5 @@ func (s *ExecStrategy) WaitUntilReady(ctx context.Context, target StrategyTarget
 		return ok
 	}
 
-	ticker := time.NewTicker(s.PollInterval)
-	defer ticker.Stop()
-
-	for {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if checkReady() {
-			return nil
-		}
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
-		}
-	}
+	return pollReady(ctx, s.PollInterval, checkReady)
 }

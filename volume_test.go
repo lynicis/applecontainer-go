@@ -30,7 +30,7 @@ func TestNewVolume(t *testing.T) {
 		t.Errorf("expected volume name 'my-custom-vol', got %q", vol.Name())
 	}
 
-	expected := []string{"volume", "create", "--size", "10GB", "--opt", "type=tmpfs", "--label", "env=test", "my-custom-vol"}
+	expected := []string{"volume", "create", "-s", "10GB", "--opt", "type=tmpfs", "--label", "env=test", "my-custom-vol"}
 	if len(capturedArgs) != len(expected) {
 		t.Fatalf("expected %d args, got %d: %v", len(expected), len(capturedArgs), capturedArgs)
 	}

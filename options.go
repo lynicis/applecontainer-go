@@ -39,7 +39,8 @@ func WithEnv(env map[string]string) ContainerCustomizer {
 	}
 }
 
-// WithEntrypoint overrides the entrypoint.
+// WithEntrypoint overrides the entrypoint. The first element is the program;
+// any remaining elements become leading container arguments.
 func WithEntrypoint(entrypoint ...string) ContainerCustomizer {
 	return func(req *ContainerRequest) error {
 		req.Entrypoint = entrypoint

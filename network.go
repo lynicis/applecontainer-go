@@ -23,13 +23,11 @@ func (n *Network) Remove(ctx context.Context) error {
 
 // NetworkRequest configuration.
 type NetworkRequest struct {
-	Name       string
-	Driver     string
-	Internal   bool
-	EnableIPv6 bool
-	Subnet     string
-	SubnetV6   string
-	Labels     map[string]string
+	Name     string
+	Internal bool
+	Subnet   string
+	SubnetV6 string
+	Labels   map[string]string
 }
 
 func generateNetworkName() string {
@@ -45,14 +43,8 @@ func NewNetwork(ctx context.Context, req NetworkRequest) (*Network, error) {
 	provider := newProvider(Read())
 
 	args := []string{"network", "create"}
-	if req.Driver != "" {
-		args = append(args, "--driver", req.Driver)
-	}
 	if req.Internal {
 		args = append(args, "--internal")
-	}
-	if req.EnableIPv6 {
-		args = append(args, "--ipv6")
 	}
 	if req.Subnet != "" {
 		args = append(args, "--subnet", req.Subnet)

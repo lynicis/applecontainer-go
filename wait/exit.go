@@ -2,6 +2,7 @@ package wait
 
 import (
 	"context"
+	"strings"
 	"time"
 )
 
@@ -28,27 +29,24 @@ func (s *ExitStrategy) WaitUntilReady(ctx context.Context, target StrategyTarget
 	checkReady := func() bool {
 		status, err := target.StateStatus(ctx)
 		if err != nil {
-			// Container might not be created or might be gone already.
-			return true
+			// A gone container has exited; other inspect errors are transient.
+			return isGone(err)
 		}
 		return status != "running"
 	}
 
-	ticker := time.NewTicker(s.PollInterval)
-	defer ticker.Stop()
+	return pollReady(ctx, s.PollInterval, checkReady)
+}
 
-	for {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if checkReady() {
-			return nil
-		}
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
-		}
+// isGone intentionally duplicates root's isNotFoundError because wait cannot import
+// the root package, and it is substring-based because the CLI exposes no structured
+// not-found error.
+func isGone(err error) bool {
+	if err == nil {
+		return false
 	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "not found") ||
+		strings.Contains(msg, "no such") ||
+		strings.Contains(msg, "does not exist")
 }

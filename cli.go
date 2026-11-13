@@ -7,13 +7,12 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
-	"strings"
 )
 
 // commandRunner is the single seam to the `container` binary. Tests fake it.
 type commandRunner interface {
 	Run(ctx context.Context, args []string, stdin []byte) (stdout, stderr []byte, exitCode int, err error)
-	Start(ctx context.Context, args []string, stdin io.Reader) (cmd *exec.Cmd, stdout, stderr io.Reader, err error)
+	Start(ctx context.Context, args []string, stdin io.Reader) (cmd *exec.Cmd, output io.Reader, err error)
 }
 
 // execRunner implements commandRunner via os/exec against a fixed binary path.
@@ -43,22 +42,21 @@ func (r *execRunner) Run(ctx context.Context, args []string, stdin []byte) ([]by
 	return out.Bytes(), errb.Bytes(), code, err
 }
 
-func (r *execRunner) Start(ctx context.Context, args []string, stdin io.Reader) (*exec.Cmd, io.Reader, io.Reader, error) {
+func (r *execRunner) Start(ctx context.Context, args []string, stdin io.Reader) (*exec.Cmd, io.Reader, error) {
 	// #nosec G204
 	cmd := exec.CommandContext(ctx, r.bin, args...)
 	cmd.Stdin = stdin
-	outPR, outPW := io.Pipe()
-	errPR, errPW := io.Pipe()
-	cmd.Stdout, cmd.Stderr = outPW, errPW
+	pr, pw := io.Pipe()
+	cmd.Stdout, cmd.Stderr = pw, pw
 	if err := cmd.Start(); err != nil {
-		return nil, nil, nil, err
+		_ = pw.Close()
+		return nil, nil, err
 	}
 	go func() {
 		_ = cmd.Wait()
-		_ = outPW.Close()
-		_ = errPW.Close()
+		_ = pw.Close()
 	}()
-	return cmd, outPR, errPR, nil
+	return cmd, pr, nil
 }
 
 type runError struct {
@@ -70,7 +68,11 @@ type runError struct {
 }
 
 func (e *runError) Error() string {
-	return fmt.Sprintf("%s %s: exit %d: %s", e.bin, strings.Join(e.args, " "), e.code, e.stderr)
+	verb := ""
+	if len(e.args) > 0 {
+		verb = " " + e.args[0]
+	}
+	return fmt.Sprintf("%s%s: exit %d: %s", e.bin, verb, e.code, e.stderr)
 }
 
 func (e *runError) Unwrap() error { return e.cause }

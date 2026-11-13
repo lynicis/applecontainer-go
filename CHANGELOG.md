@@ -13,9 +13,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Adopted the Go 1.27 toolchain and pinned golangci-lint and gosec as Go tool dependencies
 - Rewrote the README and AGENTS developer guide to reflect the current architecture and workflows
+- `NetworkRequest` no longer takes `Driver` or `EnableIPv6`; `Config.Debug` is gone (the CLI reads `CONTAINER_DEBUG` itself)
+- Containers are no longer created with `--rm`; `Terminate`/`CleanupContainer` remove them and `Prune` clears leftovers
+- `Run` now terminates and deletes the container (running registered cleanups) when any step after create fails, returning a nil container instead of a half-started one
+
+### Fixed
+- Create flags now cover DNS, DNS domain, DNS search, `--no-dns`, ulimits and network aliases
+- Ulimits with a zero soft limit are sent as `name=hard`
+- `NewNetwork` no longer sends unsupported `--driver`/`--ipv6` flags
+- `NewVolume` uses `-s` for size
+- `WithAlwaysPull` actually pulls the image before create (skipped for Containerfile builds, which build the image locally)
+- A failed version check is retried on the next `Run` instead of being cached forever
+- `wait.ForExit` only treats not-found inspect errors as exit; transient errors keep polling
+- `wait.ForLog` no longer leaks its scanner goroutine
+- Logs include stderr for both followed and one-shot reads; error messages no longer echo full CLI arguments (secrets)
+- `WithFiles` copies host files directly and treats mode `0` as `0644`
+- `WithEntrypoint` keeps the entrypoint arguments after the program
+- `HostPorts` accepts both `"80"` and `"80/tcp"` keys
+- `wait.ForHTTP` preserves query strings in the path
 
 ### Removed
 - Removed assistant-specific configuration files and bundled gitnexus skill documentation
+- Removed `NetworkRequest.Driver`, `NetworkRequest.EnableIPv6`, `Config.Debug`, `MountTypeTmpfs` and unused logger fields
+
 ## [0.2.0] - 2026-07-07
 
 ### Added

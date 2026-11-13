@@ -1,13 +1,13 @@
 .PHONY: lint test test-coverage test-benchmark test-examples sec
 
-golangci-lint = "go tool github.com/golangci/golangci-lint/v2/cmd/golangci-lint"
-gosec = "go tool github.com/securego/gosec/v2/cmd/gosec"
+GOLANGCI_LINT = go tool github.com/golangci/golangci-lint/v2/cmd/golangci-lint
+GOSEC = go tool github.com/securego/gosec/v2/cmd/gosec
 
 lint:
-	golangci-lint run ./...
+	$(GOLANGCI_LINT) run ./...
 
 fmt:
-	golangci-lint fmt ./...
+	$(GOLANGCI_LINT) fmt ./...
 
 test:
 	go test -race ./...
@@ -22,4 +22,4 @@ test-examples:
 	cd examples && APPLECONTAINER_INTEGRATION=1 go test -tags integration -v ./... && cd ../
 
 sec:
-	gosec ./...
+	$(GOSEC) ./...

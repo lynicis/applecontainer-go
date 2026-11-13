@@ -21,11 +21,25 @@ func allocateEphemeralPort() (int, error) {
 
 // wait.ParsePort splits a port string like "80/tcp" into (80, "tcp").
 
+// buildPullArgs builds the argument list for `container image pull` from a ContainerRequest.
+func buildPullArgs(req *ContainerRequest) []string {
+	args := []string{"image", "pull"}
+	if req.Platform != "" {
+		args = append(args, "--platform", req.Platform)
+	}
+	if req.Arch != "" {
+		args = append(args, "--arch", req.Arch)
+	}
+	if req.OS != "" {
+		args = append(args, "--os", req.OS)
+	}
+	return append(args, req.Image)
+}
+
 // buildCreateArgs builds the argument list for `container create` from a ContainerRequest.
 func buildCreateArgs(req *ContainerRequest, cidFile string) ([]string, error) {
 	args := []string{"create"}
 
-	args = append(args, "--rm")
 	if cidFile != "" {
 		args = append(args, "--cidfile", cidFile)
 	}
@@ -99,8 +113,35 @@ func buildCreateArgs(req *ContainerRequest, cidFile string) ([]string, error) {
 		args = append(args, "--cap-drop", cap)
 	}
 
+	for _, d := range req.DNS {
+		args = append(args, "--dns", d)
+	}
+	if req.DNSDomain != "" {
+		args = append(args, "--dns-domain", req.DNSDomain)
+	}
+	for _, d := range req.DNSSearch {
+		args = append(args, "--dns-search", d)
+	}
+	if req.NoDNS {
+		args = append(args, "--no-dns")
+	}
+	for _, u := range req.Ulimits {
+		switch {
+		case u.Hard > 0 && u.Soft > 0:
+			args = append(args, "--ulimit", fmt.Sprintf("%s=%d:%d", u.Name, u.Soft, u.Hard))
+		case u.Hard > 0:
+			args = append(args, "--ulimit", fmt.Sprintf("%s=%d", u.Name, u.Hard))
+		default:
+			args = append(args, "--ulimit", fmt.Sprintf("%s=%d", u.Name, u.Soft))
+		}
+	}
+
 	for _, network := range req.Networks {
-		args = append(args, "--network", network)
+		val := network
+		for _, alias := range req.NetworkAliases[network] {
+			val += ",alias=" + alias
+		}
+		args = append(args, "--network", val)
 	}
 
 	if len(req.ExposedPorts) > 0 {
@@ -115,6 +156,9 @@ func buildCreateArgs(req *ContainerRequest, cidFile string) ([]string, error) {
 
 			if req.HostPortMapping {
 				hostPort, ok := req.HostPorts[portStr]
+				if !ok {
+					hostPort, ok = req.HostPorts[strconv.Itoa(containerPort)]
+				}
 				if !ok || hostPort <= 0 {
 					hp, err := allocateEphemeralPort()
 					if err != nil {
@@ -153,6 +197,9 @@ func buildCreateArgs(req *ContainerRequest, cidFile string) ([]string, error) {
 	}
 
 	args = append(args, req.Image)
+	if len(req.Entrypoint) > 1 {
+		args = append(args, req.Entrypoint[1:]...)
+	}
 	if len(req.Cmd) > 0 {
 		args = append(args, req.Cmd...)
 	}

@@ -210,9 +210,9 @@ Customize the container configuration using functional options:
 Create and attach containers to custom networks to facilitate inter-container communication:
 
 ```go
-nw, err := applecontainer.NewNetwork(ctx,
-	applecontainer.WithNetworkLabels(map[string]string{"type": "integration"}),
-)
+nw, err := applecontainer.NewNetwork(ctx, applecontainer.NetworkRequest{
+	Labels: map[string]string{"type": "integration"},
+})
 defer nw.Remove(ctx)
 
 c1, err := applecontainer.Run(ctx, "nginx:alpine",
@@ -224,9 +224,9 @@ c1, err := applecontainer.Run(ctx, "nginx:alpine",
 Easily create volumes and mount them to containers to persist data across container lifecycles:
 
 ```go
-vol, err := applecontainer.NewVolume(ctx,
-	applecontainer.WithVolumeSize("10G"),
-)
+vol, err := applecontainer.NewVolume(ctx, applecontainer.VolumeRequest{
+	Size: "10G",
+})
 defer vol.Remove(ctx)
 
 c, err := applecontainer.Run(ctx, "postgres:alpine",
@@ -312,6 +312,8 @@ Integration tests run real container scenarios and require macOS with a running 
 ```bash
 make test-examples
 ```
+
+Containers are not created with `--rm`. `Terminate` (normally via `CleanupContainer`) removes them, and `Prune` clears leftovers from crashed runs.
 
 ---
 

@@ -3,7 +3,35 @@ package wait
 import (
 	"context"
 	"io"
+	"time"
 )
+
+const defaultPollInterval = 100 * time.Millisecond
+
+// pollReady runs check immediately, then every interval until it returns true or ctx is done.
+// A non-positive interval falls back to defaultPollInterval (100ms).
+func pollReady(ctx context.Context, interval time.Duration, check func() bool) error {
+	if interval <= 0 {
+		interval = defaultPollInterval
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if check() {
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
+}
 
 // Strategy defines the interface for container wait strategies.
 type Strategy interface {

@@ -6,8 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"log/slog"
-	"os"
 	"sync"
 	"testing"
 
@@ -17,8 +15,8 @@ import (
 var (
 	sessionID   string
 	sessionOnce sync.Once
-	versionOnce sync.Once
-	versionErr  error
+	versionMu   sync.Mutex
+	versionOK   bool
 )
 
 // SessionID returns a stable session identifier for the current test/run process.
@@ -31,17 +29,25 @@ func SessionID() string {
 	return sessionID
 }
 
-// versionCheckOnce runs the CLI version check exactly once.
-func versionCheckOnce(ctx context.Context) error {
-	versionOnce.Do(func() {
-		_, versionErr = VersionCheck(ctx)
-	})
-	return versionErr
+// ensureVersion runs the CLI version check until it succeeds; failures are retried.
+func ensureVersion(ctx context.Context) error {
+	versionMu.Lock()
+	defer versionMu.Unlock()
+	if versionOK {
+		return nil
+	}
+	if _, err := VersionCheck(ctx); err != nil {
+		return err
+	}
+	versionOK = true
+	return nil
 }
 
-// defaultLogger resolves the logger for a container request.
-func defaultLogger(_ *ContainerRequest) *slog.Logger {
-	return log.Default()
+// resetVersionCheck clears the cached version-check result.
+func resetVersionCheck() {
+	versionMu.Lock()
+	versionOK = false
+	versionMu.Unlock()
 }
 
 // Run creates, starts, and waits for a container using customizers.
@@ -57,7 +63,7 @@ func Run(ctx context.Context, img string, opts ...ContainerCustomizer) (*Contain
 		return nil, err
 	}
 
-	if err := versionCheckOnce(ctx); err != nil {
+	if err := ensureVersion(ctx); err != nil {
 		return nil, err
 	}
 
@@ -112,45 +118,55 @@ func Run(ctx context.Context, img string, opts ...ContainerCustomizer) (*Contain
 		}
 	}
 
-	// 2. Create container
+	// 2. Pull image when requested (a Containerfile build already refreshes it).
+	if req.AlwaysPull && req.FromContainerfile.Context == "" {
+		if _, _, _, err := provider.runner.Run(ctx, buildPullArgs(req), nil); err != nil {
+			return nil, fmt.Errorf("applecontainer: pull image %s: %w", req.Image, err)
+		}
+	}
+
+	// 3. Create container
 	created, err := provider.CreateContainer(ctx, req)
 	if err != nil {
+		runCleanups(context.WithoutCancel(ctx), req.Cleanups)
 		return nil, err
 	}
 
 	c := &Container{
 		provider: provider,
 		id:       created.id,
-		image:    req.Image,
 		req:      *req,
-		log:      defaultLogger(req),
 	}
+	keep := false
+	defer func() {
+		if !keep {
+			if err := c.Terminate(context.WithoutCancel(ctx)); err != nil {
+				log.Printf("applecontainer: cleanup failed: %v", err)
+			}
+		}
+	}()
 
-	// 3. Copy files to container
+	// 4. Copy files to container
 	for _, file := range req.Files {
-		content, err := os.ReadFile(file.HostFilePath)
-		if err != nil {
-			return c, fmt.Errorf("applecontainer: failed to read host file %s for copy: %w", file.HostFilePath, err)
-		}
-		if err := c.CopyToContainer(ctx, content, file.ContainerFilePath, file.FileMode); err != nil {
-			return c, fmt.Errorf("applecontainer: failed to copy file %s to container: %w", file.HostFilePath, err)
+		if err := c.CopyFileToContainer(ctx, file.HostFilePath, file.ContainerFilePath, file.FileMode); err != nil {
+			return nil, fmt.Errorf("applecontainer: failed to copy file %s to container: %w", file.HostFilePath, err)
 		}
 	}
 
-	// 4. Start container
+	// 5. Start container
 	if err := c.provider.StartContainer(ctx, c); err != nil {
-		return c, err
+		return nil, err
 	}
 	log.Printf("Container %s started.", c.GetContainerID())
 	c.isRunning.Store(true)
 
-	// 5. Setup logs if requested
+	// 6. Setup logs if requested
 	if len(req.LogWriters) > 0 {
 		logCtx, cancel := context.WithCancel(context.Background())
 		c.logCancel = cancel
 		rc, err := c.provider.ContainerLogs(logCtx, c.id, true, 0)
 		if err != nil {
-			return c, fmt.Errorf("applecontainer: failed to start log follower: %w", err)
+			return nil, fmt.Errorf("applecontainer: failed to start log follower: %w", err)
 		}
 		go func() {
 			defer func() { _ = rc.Close() }()
@@ -159,13 +175,14 @@ func Run(ctx context.Context, img string, opts ...ContainerCustomizer) (*Contain
 		}()
 	}
 
-	// 6. Wait until ready
+	// 7. Wait until ready
 	if req.WaitingFor != nil {
 		if err := req.WaitingFor.WaitUntilReady(ctx, waitTarget{c}); err != nil {
-			return c, fmt.Errorf("applecontainer: wait strategy failed: %w", err)
+			return nil, fmt.Errorf("applecontainer: wait strategy failed: %w", err)
 		}
 	}
 
+	keep = true
 	return c, nil
 }
 

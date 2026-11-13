@@ -56,23 +56,7 @@ func (s *PortStrategy) WaitUntilReady(ctx context.Context, target StrategyTarget
 		return true
 	}
 
-	ticker := time.NewTicker(s.PollInterval)
-	defer ticker.Stop()
-
-	for {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if checkReady() {
-			return nil
-		}
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
-		}
-	}
+	return pollReady(ctx, s.PollInterval, checkReady)
 }
 
 // ParsePort parses a port number and protocol from a port string (e.g. "80/tcp" or "80").

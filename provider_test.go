@@ -12,8 +12,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/lynicis/applecontainer-go/log"
 )
 
 func TestCreateContainer(t *testing.T) {
@@ -40,7 +38,6 @@ func TestCreateContainer(t *testing.T) {
 	p := &Provider{
 		runner: runner,
 		cfg:    Config{},
-		log:    log.TestLogger(t),
 	}
 
 	req := &ContainerRequest{
@@ -88,7 +85,6 @@ func TestStartContainer(t *testing.T) {
 	p := &Provider{
 		runner: runner,
 		cfg:    Config{},
-		log:    log.TestLogger(t),
 	}
 
 	c := &Container{
@@ -126,7 +122,6 @@ func TestStopContainer(t *testing.T) {
 	p := &Provider{
 		runner: runner,
 		cfg:    Config{},
-		log:    log.TestLogger(t),
 	}
 
 	// Test nil timeout (should use 5)
@@ -175,7 +170,6 @@ func TestDeleteContainer(t *testing.T) {
 	p := &Provider{
 		runner: runner,
 		cfg:    Config{},
-		log:    log.TestLogger(t),
 	}
 
 	// Test delete without force
@@ -224,7 +218,6 @@ func TestInspectContainer(t *testing.T) {
 	p := &Provider{
 		runner: runner,
 		cfg:    Config{},
-		log:    log.TestLogger(t),
 	}
 
 	ins, err := p.InspectContainer(context.Background(), fakeCID)
@@ -258,14 +251,13 @@ func TestContainerLogs(t *testing.T) {
 		runner := &fakeRunner{
 			runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
 				capturedArgs = args
-				return []byte("log line 1\nlog line 2\n"), nil, 0, nil
+				return []byte("log line 1\nlog line 2\n"), []byte("warn: x\n"), 0, nil
 			},
 		}
 
 		p := &Provider{
 			runner: runner,
 			cfg:    Config{},
-			log:    log.TestLogger(t),
 		}
 
 		rc, err := p.ContainerLogs(context.Background(), fakeCID, false, 10)
@@ -279,8 +271,9 @@ func TestContainerLogs(t *testing.T) {
 			t.Fatalf("failed to read logs: %v", err)
 		}
 
-		if string(data) != "log line 1\nlog line 2\n" {
-			t.Errorf("got %q, want logs", string(data))
+		want := "log line 1\nlog line 2\nwarn: x\n"
+		if string(data) != want {
+			t.Errorf("got %q, want %q", string(data), want)
 		}
 
 		expectedArgs := []string{"logs", "-n", "10", fakeCID}
@@ -299,20 +292,19 @@ func TestContainerLogs(t *testing.T) {
 		var capturedArgs []string
 		pr, pw := io.Pipe()
 		runner := &fakeRunner{
-			startFn: func(ctx context.Context, args []string, stdin io.Reader) (*exec.Cmd, io.Reader, io.Reader, error) {
+			startFn: func(ctx context.Context, args []string, stdin io.Reader) (*exec.Cmd, io.Reader, error) {
 				capturedArgs = args
 				cmd := exec.Command("sleep", "10")
 				if err := cmd.Start(); err != nil {
 					t.Fatal(err)
 				}
-				return cmd, pr, nil, nil
+				return cmd, pr, nil
 			},
 		}
 
 		p := &Provider{
 			runner: runner,
 			cfg:    Config{},
-			log:    log.TestLogger(t),
 		}
 
 		rc, err := p.ContainerLogs(context.Background(), fakeCID, true, 0)
@@ -363,7 +355,6 @@ func TestExecContainer(t *testing.T) {
 	p := &Provider{
 		runner: runner,
 		cfg:    Config{},
-		log:    log.TestLogger(t),
 	}
 
 	cmd := []string{"echo", "hello"}
@@ -438,7 +429,6 @@ func TestCopyToContainer(t *testing.T) {
 	p := &Provider{
 		runner: runner,
 		cfg:    Config{},
-		log:    log.TestLogger(t),
 	}
 
 	err := p.CopyToContainer(context.Background(), fakeCID, "/app/config.json", []byte("fake file content"), 0644)
@@ -458,6 +448,26 @@ func TestCopyToContainer(t *testing.T) {
 	if capturedArgs[2] != expectedDest {
 		t.Errorf("expected destination %q, got %q", expectedDest, capturedArgs[2])
 	}
+}
+
+func TestCopyToContainer_DefaultMode(t *testing.T) {
+	var gotMode os.FileMode
+	runner := &fakeRunner{
+		runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
+			if len(args) == 3 && args[0] == "cp" {
+				info, err := os.Stat(args[1])
+				if err != nil {
+					return nil, nil, -1, err
+				}
+				gotMode = info.Mode().Perm()
+			}
+			return nil, nil, 0, nil
+		},
+	}
+
+	p := &Provider{runner: runner}
+	require.NoError(t, p.CopyToContainer(context.Background(), "id", "/dest", []byte("x"), 0))
+	assert.Equal(t, os.FileMode(0o644), gotMode)
 }
 
 func TestCopyFileFromContainer(t *testing.T) {
@@ -481,7 +491,6 @@ func TestCopyFileFromContainer(t *testing.T) {
 	p := &Provider{
 		runner: runner,
 		cfg:    Config{},
-		log:    log.TestLogger(t),
 	}
 
 	rc, err := p.CopyFileFromContainer(context.Background(), fakeCID, "/app/config.json")
@@ -537,7 +546,6 @@ func TestProviderErrorCases(t *testing.T) {
 	}
 	p := &Provider{
 		runner: runner,
-		log:    log.TestLogger(t),
 	}
 
 	_, err := p.CreateContainer(context.Background(), &ContainerRequest{})
@@ -571,6 +579,10 @@ func TestCopyToContainerErrors(t *testing.T) {
 
 func TestCheckedFileMode(t *testing.T) {
 	mode, err := checkedFileMode(0o644)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o644), mode)
+
+	mode, err = checkedFileMode(0)
 	require.NoError(t, err)
 	assert.Equal(t, os.FileMode(0o644), mode)
 

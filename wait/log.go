@@ -63,13 +63,19 @@ func (s *LogStrategy) WaitUntilReady(ctx context.Context, target StrategyTarget)
 	count := 0
 	lineChan := make(chan string, 100)
 	errChan := make(chan error, 1)
+	done := make(chan struct{})
+	defer close(done)
 
 	go func() {
+		defer close(lineChan)
 		scanner := bufio.NewScanner(reader)
 		for scanner.Scan() {
-			lineChan <- scanner.Text()
+			select {
+			case lineChan <- scanner.Text():
+			case <-done:
+				return
+			}
 		}
-		close(lineChan)
 		if err := scanner.Err(); err != nil {
 			errChan <- err
 		}

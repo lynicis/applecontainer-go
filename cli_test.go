@@ -47,6 +47,13 @@ func TestExecRunnerPropagatesExitCode(t *testing.T) {
 	}
 }
 
+func TestRunError_RedactsArgs(t *testing.T) {
+	e := &runError{bin: "container", args: []string{"create", "-e", "DB_PASSWORD=hunter2"}, code: 1, stderr: "boom"}
+	msg := e.Error()
+	assert.Equal(t, "container create: exit 1: boom", msg)
+	assert.NotContains(t, msg, "hunter2")
+}
+
 func TestCliProper(t *testing.T) {
 	e := &runError{bin: "bin", args: []string{"a"}, code: 1, stderr: "err", cause: os.ErrClosed}
 	assert.ErrorIs(t, e.Unwrap(), os.ErrClosed)
@@ -55,7 +62,7 @@ func TestCliProper(t *testing.T) {
 	runner := newExecRunner("echo")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
-	cmd, _, _, err := runner.Start(ctx, []string{"hello"}, nil)
+	cmd, _, err := runner.Start(ctx, []string{"hello"}, nil)
 	require.NoError(t, err)
 	assert.NotNil(t, cmd)
 }
@@ -70,11 +77,10 @@ func TestCLIStartAndRun(t *testing.T) {
 	assert.Contains(t, string(stdout), "hello")
 
 	// Test Start
-	cmd, pr, pw, err := r.Start(context.Background(), []string{"hello"}, nil)
+	cmd, pr, err := r.Start(context.Background(), []string{"hello"}, nil)
 	assert.NoError(t, err)
 	assert.NotNil(t, cmd)
 	assert.NotNil(t, pr)
-	assert.NotNil(t, pw)
 	out, _ := io.ReadAll(pr)
 	assert.Contains(t, string(out), "hello")
 }

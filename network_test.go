@@ -20,13 +20,11 @@ func TestNewNetwork(t *testing.T) {
 	defer func() { providerRunnerOverride = nil }()
 
 	nw, err := NewNetwork(context.Background(), NetworkRequest{
-		Name:       "my-custom-net",
-		Labels:     map[string]string{"env": "test"},
-		Driver:     "bridge",
-		Internal:   true,
-		EnableIPv6: true,
-		Subnet:     "10.0.0.0/24",
-		SubnetV6:   "fd00::/64",
+		Name:     "my-custom-net",
+		Labels:   map[string]string{"env": "test"},
+		Internal: true,
+		Subnet:   "10.0.0.0/24",
+		SubnetV6: "fd00::/64",
 	})
 	if err != nil {
 		t.Fatalf("failed to create network: %v", err)
@@ -36,7 +34,7 @@ func TestNewNetwork(t *testing.T) {
 		t.Errorf("expected network name 'my-custom-net', got %q", nw.Name())
 	}
 
-	expected := []string{"network", "create", "--driver", "bridge", "--internal", "--ipv6", "--subnet", "10.0.0.0/24", "--subnet-v6", "fd00::/64", "--label", "env=test", "my-custom-net"}
+	expected := []string{"network", "create", "--internal", "--subnet", "10.0.0.0/24", "--subnet-v6", "fd00::/64", "--label", "env=test", "my-custom-net"}
 	if len(capturedArgs) != len(expected) {
 		t.Fatalf("expected %d args, got %d: %v", len(expected), len(capturedArgs), capturedArgs)
 	}

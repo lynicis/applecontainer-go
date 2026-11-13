@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -586,6 +587,31 @@ func TestForExit_Error(t *testing.T) {
 			return "", errors.New("status error")
 		},
 	})
+	assert.Error(t, err)
+}
+
+func TestForExit_TransientErrorKeepsPolling(t *testing.T) {
+	count := 0
+	strat := ForExit().WithPollInterval(time.Millisecond)
+	err := strat.WaitUntilReady(context.Background(), &fakeTarget{
+		statusFunc: func(ctx context.Context) (string, error) {
+			count++
+			if count == 1 {
+				return "", errors.New("temporary inspect failure")
+			}
+			return "exited", nil
+		},
+	})
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, count, 2)
+}
+
+func TestForExit_NotFoundReturns(t *testing.T) {
+	err := ForExit().WaitUntilReady(context.Background(), &fakeTarget{
+		statusFunc: func(ctx context.Context) (string, error) {
+			return "", errors.New("container not found")
+		},
+	})
 	assert.NoError(t, err)
 }
 
@@ -638,4 +664,113 @@ func TestForAllStrategy_Deadline(t *testing.T) {
 	composite := ForAll(s1).WithDeadline(10 * time.Millisecond)
 	err := composite.WaitUntilReady(context.Background(), &fakeTarget{})
 	assert.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
+type blockingLogReader struct {
+	closed chan struct{}
+	once   sync.Once
+	sent   bool
+}
+
+func (b *blockingLogReader) Read(p []byte) (int, error) {
+	if !b.sent {
+		b.sent = true
+		return copy(p, "ready\n"), nil
+	}
+	<-b.closed
+	return 0, io.EOF
+}
+
+func (b *blockingLogReader) Close() error {
+	b.once.Do(func() { close(b.closed) })
+	return nil
+}
+
+func TestForLog_NoGoroutineLeak(t *testing.T) {
+	baseline := runtime.NumGoroutine()
+	reader := &blockingLogReader{closed: make(chan struct{})}
+	err := ForLog("ready").WaitUntilReady(context.Background(), &fakeTarget{
+		logsFunc: func(ctx context.Context) (io.ReadCloser, error) { return reader, nil },
+	})
+	require.NoError(t, err)
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if runtime.NumGoroutine() <= baseline {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("log scanner goroutine leaked: baseline %d, now %d", baseline, runtime.NumGoroutine())
+}
+
+func TestPollReady_ZeroIntervalDoesNotPanic(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	err := pollReady(ctx, 0, func() bool { return false })
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
+func TestForHTTP_QueryString(t *testing.T) {
+	queries := make(chan string, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case queries <- r.URL.RawQuery:
+		default:
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	host, portStr, err := net.SplitHostPort(server.Listener.Addr().String())
+	require.NoError(t, err)
+	portVal, err := strconv.Atoi(portStr)
+	require.NoError(t, err)
+
+	err = ForHTTP("/health?a=1&b=2").WithPort("80").WaitUntilReady(context.Background(), &fakeTarget{
+		hostFunc: func(ctx context.Context) (string, error) { return host, nil },
+		mappedPortFunc: func(ctx context.Context, port string) (int, error) {
+			return portVal, nil
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "a=1&b=2", <-queries)
+}
+
+func TestForHTTP_TolerantPath(t *testing.T) {
+	cases := []struct{ name, path, wantPath, wantQuery string }{
+		{"bare percent", "/a%b", "/a%b", ""},
+		{"query preserved", "/a?x=1&y=2", "/a", "x=1&y=2"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			type req struct{ path, query string }
+			got := make(chan req, 1)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				select {
+				case got <- req{r.URL.Path, r.URL.RawQuery}:
+				default:
+				}
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer server.Close()
+
+			host, portStr, err := net.SplitHostPort(server.Listener.Addr().String())
+			require.NoError(t, err)
+			portVal, err := strconv.Atoi(portStr)
+			require.NoError(t, err)
+
+			err = ForHTTP(tc.path).WithPort("80").WaitUntilReady(context.Background(), &fakeTarget{
+				hostFunc: func(ctx context.Context) (string, error) { return host, nil },
+				mappedPortFunc: func(ctx context.Context, port string) (int, error) {
+					return portVal, nil
+				},
+			})
+			require.NoError(t, err)
+
+			r := <-got
+			assert.Equal(t, tc.wantPath, r.path)
+			assert.Equal(t, tc.wantQuery, r.query)
+		})
+	}
 }

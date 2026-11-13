@@ -229,7 +229,7 @@ func TestRun_BuildImage(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.True(t, buildCalled)
-	assert.NotEmpty(t, c.image)
+	assert.NotEmpty(t, c.req.Image)
 
 	// Trigger cleanup
 	for _, f := range c.req.Cleanups {
@@ -262,8 +262,8 @@ func TestRun_Coverage(t *testing.T) {
 			}
 			return nil, nil, 0, nil
 		},
-		startFn: func(ctx context.Context, args []string, stdin io.Reader) (*exec.Cmd, io.Reader, io.Reader, error) {
-			return nil, strings.NewReader("log data"), strings.NewReader(""), nil
+		startFn: func(ctx context.Context, args []string, stdin io.Reader) (*exec.Cmd, io.Reader, error) {
+			return nil, strings.NewReader("log data"), nil
 		},
 	}
 	providerRunnerOverride = runner
@@ -278,6 +278,7 @@ func TestRun_Coverage(t *testing.T) {
 	assert.ErrorContains(t, err, "failed to read host file")
 
 	// Version check error
+	Reset()
 	badRunner := &fakeRunner{
 		runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
 			return nil, nil, 1, errors.New("exec error")
@@ -285,11 +286,147 @@ func TestRun_Coverage(t *testing.T) {
 	}
 	providerRunnerOverride = badRunner
 	_, err = Run(context.Background(), "nginx")
-	assert.ErrorContains(t, err, "exec error")
+	assert.ErrorContains(t, err, "cannot run container CLI")
 	providerRunnerOverride = runner
 
 	// LogWriters
 	buf := new(bytes.Buffer)
 	_, err = Run(context.Background(), "nginx", WithLogWriters(buf))
 	assert.NoError(t, err)
+}
+
+// fakeCreateRunner returns a runner that answers --version and writes the cidfile on create.
+// Each other command's name (image pull reported as "pull") is appended to calls when non-nil.
+func fakeCreateRunner(t *testing.T, cid string, calls *[]string) *fakeRunner {
+	t.Helper()
+	return &fakeRunner{
+		runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
+			if len(args) == 0 {
+				return nil, nil, 0, nil
+			}
+			if args[0] == "--version" {
+				return []byte("container version 1.0.0\n"), nil, 0, nil
+			}
+			cmd := args[0]
+			if cmd == "image" && len(args) > 1 {
+				cmd = args[1]
+			}
+			if calls != nil {
+				*calls = append(*calls, cmd)
+			}
+			if cmd == "create" {
+				for i, arg := range args {
+					if arg == "--cidfile" && i+1 < len(args) {
+						_ = os.WriteFile(args[i+1], []byte(cid), 0644)
+						break
+					}
+				}
+			}
+			return nil, nil, 0, nil
+		},
+	}
+}
+
+func TestRun_AlwaysPullBeforeCreate(t *testing.T) {
+	Reset()
+
+	var calls []string
+	providerRunnerOverride = fakeCreateRunner(t, "cid", &calls)
+	defer func() { providerRunnerOverride = nil }()
+
+	_, err := Run(context.Background(), "nginx", WithAlwaysPull(true))
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(calls), 2)
+	assert.Equal(t, "pull", calls[0])
+	assert.Equal(t, "create", calls[1])
+}
+
+func runWithFailure(t *testing.T, startErr, waitErr error) {
+	t.Helper()
+	Reset()
+
+	var stopped, deleted bool
+	runner := fakeCreateRunner(t, "cid", nil)
+	createFn := runner.runFn
+	runner.runFn = func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
+		if len(args) > 0 {
+			switch args[0] {
+			case "start":
+				if startErr != nil {
+					return nil, nil, 1, startErr
+				}
+			case "stop":
+				stopped = true
+				return nil, nil, 0, nil
+			case "delete":
+				deleted = true
+				return nil, nil, 0, nil
+			}
+		}
+		return createFn(ctx, args, stdin)
+	}
+	providerRunnerOverride = runner
+	defer func() { providerRunnerOverride = nil }()
+
+	opts := []ContainerCustomizer{}
+	if waitErr != nil {
+		opts = append(opts, WithWaitStrategy(mockWait{err: waitErr}))
+	}
+	c, err := Run(context.Background(), "nginx", opts...)
+	require.Error(t, err)
+	assert.Nil(t, c)
+	assert.True(t, stopped, "stop must be called during cleanup")
+	assert.True(t, deleted, "delete must be called during cleanup")
+}
+
+func TestRun_CleansUpOnStartFailure(t *testing.T) {
+	runWithFailure(t, errors.New("start boom"), nil)
+}
+
+func TestRun_CleansUpOnWaitFailure(t *testing.T) {
+	runWithFailure(t, nil, errors.New("wait boom"))
+}
+
+func TestRun_RunsCleanupsWhenCreateFails(t *testing.T) {
+	Reset()
+
+	cleaned := false
+	runner := &fakeRunner{
+		runFn: func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
+			if len(args) > 0 && args[0] == "--version" {
+				return []byte("container version 1.0.0\n"), nil, 0, nil
+			}
+			if len(args) > 0 && args[0] == "create" {
+				return nil, nil, 1, errors.New("create boom")
+			}
+			return nil, nil, 0, nil
+		},
+	}
+	providerRunnerOverride = runner
+	defer func() { providerRunnerOverride = nil }()
+
+	_, err := Run(context.Background(), "nginx", func(req *ContainerRequest) error {
+		req.Cleanups = append(req.Cleanups, func(context.Context) error {
+			cleaned = true
+			return nil
+		})
+		return nil
+	})
+	require.Error(t, err)
+	assert.True(t, cleaned, "cleanups must run when create fails")
+}
+
+func TestVersionCheckRetriesAfterFailure(t *testing.T) {
+	Reset()
+
+	providerRunnerOverride = &fakeRunner{err: errors.New("boom")}
+	_, err := Run(context.Background(), "nginx")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "cannot run container CLI")
+
+	providerRunnerOverride = fakeCreateRunner(t, "cid", nil)
+	defer func() { providerRunnerOverride = nil }()
+
+	_, err = Run(context.Background(), "nginx")
+	require.NoError(t, err)
 }

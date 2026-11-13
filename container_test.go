@@ -12,8 +12,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/lynicis/applecontainer-go/log"
 )
 
 func TestContainerEndpointMath_DirectIP(t *testing.T) {
@@ -44,7 +42,6 @@ func TestContainerEndpointMath_DirectIP(t *testing.T) {
 	p := &Provider{
 		runner: runner,
 		cfg:    Config{},
-		log:    log.TestLogger(t),
 	}
 
 	c := &Container{
@@ -147,7 +144,6 @@ func TestContainerEndpointMath_HostPortMapping(t *testing.T) {
 	p := &Provider{
 		runner: runner,
 		cfg:    Config{},
-		log:    log.TestLogger(t),
 	}
 
 	c := &Container{
@@ -227,7 +223,6 @@ func TestContainerStartStopLifecycle(t *testing.T) {
 	p := &Provider{
 		runner: runner,
 		cfg:    Config{},
-		log:    log.TestLogger(t),
 	}
 
 	c := &Container{
@@ -288,7 +283,6 @@ func TestContainerTerminateIdempotency(t *testing.T) {
 		p := &Provider{
 			runner: runner,
 			cfg:    Config{},
-			log:    log.TestLogger(t),
 		}
 
 		c := &Container{
@@ -332,7 +326,6 @@ func TestContainerTerminateIdempotency(t *testing.T) {
 		p := &Provider{
 			runner: runner,
 			cfg:    Config{},
-			log:    log.TestLogger(t),
 		}
 
 		c := &Container{
@@ -371,7 +364,6 @@ func TestContainerTerminateIdempotency(t *testing.T) {
 		p := &Provider{
 			runner: runner,
 			cfg:    Config{},
-			log:    log.TestLogger(t),
 		}
 
 		c := &Container{
@@ -407,13 +399,12 @@ func TestContainerDelegationProper(t *testing.T) {
 			}
 			return []byte{}, []byte{}, 0, nil
 		},
-		startFn: func(ctx context.Context, args []string, stdin io.Reader) (*exec.Cmd, io.Reader, io.Reader, error) {
-			return nil, strings.NewReader(""), strings.NewReader(""), nil
+		startFn: func(ctx context.Context, args []string, stdin io.Reader) (*exec.Cmd, io.Reader, error) {
+			return nil, strings.NewReader(""), nil
 		},
 	}
 	p := &Provider{
 		runner: runner,
-		log:    log.TestLogger(t),
 	}
 	c := &Container{
 		provider: p,
@@ -492,7 +483,6 @@ func TestContainer_CopyFileToContainer_UsesDirectCopyWhenModeMatches(t *testing.
 	}
 	p := &Provider{
 		runner: runner,
-		log:    log.TestLogger(t),
 	}
 	c := &Container{
 		provider: p,
@@ -520,7 +510,6 @@ func TestContainer_CopyFileToContainer_Error(t *testing.T) {
 	}
 	p := &Provider{
 		runner: runner,
-		log:    log.TestLogger(t),
 	}
 	c := &Container{
 		provider: p,
@@ -542,7 +531,6 @@ func TestContainerTerminate_LogCancel_And_StopError(t *testing.T) {
 	}
 	p := &Provider{
 		runner: runner,
-		log:    log.TestLogger(t),
 	}
 	c := &Container{
 		provider:  p,

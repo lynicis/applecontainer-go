@@ -43,7 +43,7 @@ func NewVolume(ctx context.Context, req VolumeRequest) (*Volume, error) {
 
 	args := []string{"volume", "create"}
 	if req.Size != "" {
-		args = append(args, "--size", req.Size)
+		args = append(args, "-s", req.Size)
 	}
 	for k, v := range req.Options {
 		args = append(args, "--opt", fmt.Sprintf("%s=%s", k, v))

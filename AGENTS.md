@@ -14,7 +14,7 @@ Root package `applecontainer`; three subpackages: `wait/` (readiness strategies)
 Run(ctx, img, opts...)            applecontainer.go
   └─ ContainerCustomizer → *ContainerRequest   options.go
   └─ req.Validate()                             container.go
-  └─ Config.Read() + VersionCheck (once)        config.go
+  └─ Config.Read() + VersionCheck (retried)     config.go
   └─ Provider                                    provider.go
        └─ buildCreateArgs → []string             args.go
        └─ commandRunner.Run/Start                cli.go  ← only exec seam
@@ -23,11 +23,12 @@ Run(ctx, img, opts...)            applecontainer.go
 ```
 
 - `Run` (`applecontainer.go:48`) is the one-shot entry point; `ContainerRequest` (`container.go`) is the declarative spec; `Provider` (`provider.go`) is the CLI verb set; `Container` is a thin facade delegating everything to `Provider`.
+- `Run` builds pull flags via `buildPullArgs` (`args.go`); any failure after `create` terminates the container, runs `req.Cleanups`, and returns a nil `*Container`.
 - `commandRunner` (`cli.go:11`) is the **single seam to the `container` binary**. Production impl is `execRunner`; tests inject a fake. Preserve this boundary — never call `os/exec` directly from feature code.
 - `providerRunnerOverride` (`provider.go:29`) lets tests swap the runner for `Run()` itself.
-- Config is read once (`sync.Once`) from `~/.applecontainer.properties`, then overridden by env (`CONTAINER_BINARY`, `CONTAINER_DEBUG`). `Reset()` exists for tests only.
+- Config is read once (`sync.Once`) from `~/.applecontainer.properties`, then overridden by `CONTAINER_BINARY`. `Reset()` exists for tests only and also clears the cached version check.
 - Networking has two modes: direct container IP (default, `Host()` = container IP) and host-port mapping (`WithHostPortMapping(true)`, ephemeral ports bound on 127.0.0.1). Port/host resolution goes through `Inspect` JSON — see `Container.Host/Endpoint/MappedPort` (`container.go:173-231`).
-- Concurrency: `sync.Once` for config/version/session id, `atomic.Bool` for the running flag, goroutine + `io.MultiWriter` for log following.
+- Concurrency: `sync.Once` for config and session id; the version check uses a mutex-guarded flag so a failed check is retried on the next `Run`; `atomic.Bool` for the running flag; goroutine + `io.MultiWriter` for log following.
 
 ## Key Directories
 
@@ -52,7 +53,7 @@ make test-examples   # cd examples && APPLECONTAINER_INTEGRATION=1 go test -tags
 make test-benchmark  # cd benchmarks && APPLECONTAINER_BENCHMARK=1 go test -bench=. -benchtime=1x -tags benchmark -timeout=600s ./...
 ```
 
-`golangci-lint` and `gosec` are pinned in the `tool` block of `go.mod` (`go.mod:257`), but the Makefile calls the bare binaries and its `golangci-lint = "go tool ..."` variables are never expanded — so `make lint` / `make sec` need them on `PATH`, or run `go tool github.com/golangci/golangci-lint/v2/cmd/golangci-lint run ./...` directly.
+`golangci-lint` and `gosec` are pinned in the `tool` block of `go.mod` (`go.mod:257`); the Makefile invokes them through `$(GOLANGCI_LINT)` / `$(GOSEC)`, which expand to `go tool ...`, so no `PATH` install is needed.
 
 ## Code Conventions & Common Patterns
 
@@ -74,6 +75,7 @@ make test-benchmark  # cd benchmarks && APPLECONTAINER_BENCHMARK=1 go test -benc
 - Anything touching the real CLI belongs in `examples/` behind `//go:build integration` + `APPLECONTAINER_INTEGRATION=1`, and must call `applecontainer.SkipIfProviderNotHealthy(t)` so unsupported machines skip rather than fail. Use `CleanupContainer` / `CleanupNetwork` for teardown.
 - Benchmarks live in the separate `benchmarks/` module, gated by `APPLECONTAINER_BENCHMARK=1`; `RunWithBoth` runs each case against both runtimes.
 - CI (`.github/workflows/ci.yml`): lint + gosec on ubuntu, `make test-coverage` on `macos-latest`, coverage uploaded to Codecov. Integration tests and benchmarks are not in CI.
+- `Reset()` also resets the version-check state, so tests that exercise `Run`'s version gate must call it first.
 - New behavior needs a unit test; new `WithXxx` options or wait strategies also need a README row and, where practical, an `examples/` case.
 - Add user-visible changes under `## [Unreleased]` in `CHANGELOG.md` (Keep a Changelog + SemVer sections: Added/Changed/Removed/Fixed/Security/Documentation).
 - Gotcha: `make test-coverage` writes `coverage.txt`, but `.gitignore` only lists `coverage.out`/`coverage.html` — do not commit the profile.

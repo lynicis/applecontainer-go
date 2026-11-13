@@ -5,15 +5,12 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/lynicis/applecontainer-go/log"
 )
 
 // ProcessOption is a functional option for container execution.
@@ -28,7 +25,6 @@ type processOptions struct {
 type Provider struct {
 	runner commandRunner
 	cfg    Config
-	log    *slog.Logger
 }
 
 var providerRunnerOverride commandRunner
@@ -41,7 +37,6 @@ func newProvider(cfg Config) *Provider {
 	return &Provider{
 		runner: runner,
 		cfg:    cfg,
-		log:    log.Default(),
 	}
 }
 
@@ -171,23 +166,23 @@ func (p *Provider) ContainerLogs(ctx context.Context, id string, follow bool, n 
 
 	if follow {
 		args = append(args, "-f", id)
-		cmd, stdout, _, err := p.runner.Start(ctx, args, nil)
+		cmd, out, err := p.runner.Start(ctx, args, nil)
 		if err != nil {
 			return nil, fmt.Errorf("applecontainer: start follow logs failed: %w", err)
 		}
 		return &followLogsReadCloser{
-			Reader: stdout,
+			Reader: out,
 			cmd:    cmd,
 		}, nil
 	}
 
 	args = append(args, id)
-	stdout, _, _, err := p.runner.Run(ctx, args, nil)
+	stdout, stderr, _, err := p.runner.Run(ctx, args, nil)
 	if err != nil {
 		return nil, fmt.Errorf("applecontainer: get logs failed: %w", err)
 	}
 
-	return io.NopCloser(bytes.NewReader(stdout)), nil
+	return io.NopCloser(io.MultiReader(bytes.NewReader(stdout), bytes.NewReader(stderr))), nil
 }
 
 // ExecContainer executes a command inside a running container.
@@ -224,6 +219,10 @@ func (p *Provider) ExecContainer(ctx context.Context, id string, cmd []string, o
 func checkedFileMode(mode int64) (os.FileMode, error) {
 	if mode < 0 || mode > int64(^uint32(0)) {
 		return 0, fmt.Errorf("applecontainer: invalid file mode %d", mode)
+	}
+	// Mode 0 means unset and resolves to 0o644.
+	if mode == 0 {
+		return 0o644, nil
 	}
 	return os.FileMode(uint32(mode)), nil
 }

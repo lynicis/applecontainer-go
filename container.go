@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -92,7 +91,6 @@ type MountType string
 const (
 	MountTypeBind   MountType = "bind"
 	MountTypeVolume MountType = "volume"
-	MountTypeTmpfs  MountType = "tmpfs"
 )
 
 // Mount represents a container mount configuration.
@@ -156,9 +154,7 @@ func (req *ContainerRequest) Validate() error {
 type Container struct {
 	provider  *Provider
 	id        string
-	image     string
 	req       ContainerRequest
-	log       *slog.Logger
 	isRunning atomic.Bool
 	logCancel context.CancelFunc
 }
@@ -314,13 +310,17 @@ func (c *Container) Terminate(ctx context.Context) error {
 		return delErr
 	}
 
-	for _, cleanup := range c.req.Cleanups {
+	runCleanups(ctx, c.req.Cleanups)
+
+	return nil
+}
+
+func runCleanups(ctx context.Context, cleanups []func(context.Context) error) {
+	for _, cleanup := range cleanups {
 		if err := cleanup(ctx); err != nil {
 			log.Printf("applecontainer: cleanup failed: %v", err)
 		}
 	}
-
-	return nil
 }
 
 // Logs returns a reader for the container's logs.

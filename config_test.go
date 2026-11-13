@@ -21,7 +21,7 @@ type fakeRunner struct {
 	gotStdin  []byte
 	callCount int
 	runFn     func(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error)
-	startFn   func(ctx context.Context, args []string, stdin io.Reader) (*exec.Cmd, io.Reader, io.Reader, error)
+	startFn   func(ctx context.Context, args []string, stdin io.Reader) (*exec.Cmd, io.Reader, error)
 }
 
 func (f *fakeRunner) Run(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, int, error) {
@@ -34,11 +34,11 @@ func (f *fakeRunner) Run(ctx context.Context, args []string, stdin []byte) ([]by
 	return []byte(f.stdout), []byte(f.stderr), f.code, f.err
 }
 
-func (f *fakeRunner) Start(ctx context.Context, args []string, stdin io.Reader) (*exec.Cmd, io.Reader, io.Reader, error) {
+func (f *fakeRunner) Start(ctx context.Context, args []string, stdin io.Reader) (*exec.Cmd, io.Reader, error) {
 	if f.startFn != nil {
 		return f.startFn(ctx, args, stdin)
 	}
-	return nil, nil, nil, errors.New("fakeRunner: Start not implemented")
+	return nil, nil, errors.New("fakeRunner: Start not implemented")
 }
 
 func TestReadEnvOverridesProperties(t *testing.T) {
@@ -54,14 +54,10 @@ func TestReadEnvOverridesProperties(t *testing.T) {
 	t.Cleanup(func() { propertiesPath = original })
 
 	t.Setenv("CONTAINER_BINARY", "/usr/bin/from-env")
-	t.Setenv("CONTAINER_DEBUG", "true")
 
 	cfg := Read()
 	if cfg.BinaryPath != "/usr/bin/from-env" {
 		t.Fatalf("BinaryPath=%q want /usr/bin/from-env (env should override properties)", cfg.BinaryPath)
-	}
-	if cfg.Debug != true {
-		t.Fatalf("Debug=%v want true", cfg.Debug)
 	}
 }
 
@@ -110,35 +106,10 @@ container.default.network=custom-net
 container.default.platform=linux/amd64
 hub.image.name.prefix=test/
 container.pull.timeout=10s
-container.debug=true
 unknown=key
 `
 	applyProperties(&c, content)
 	if c.BinaryPath != "/bin/custom" {
 		t.Errorf("BinaryPath = %q", c.BinaryPath)
-	}
-	if c.Debug != true {
-		t.Errorf("Debug = %v", c.Debug)
-	}
-}
-
-func TestParseBoolAll(t *testing.T) {
-	tests := []struct {
-		in  string
-		out bool
-	}{
-		{"true", true},
-		{"1", true},
-
-		{"false", false},
-		{"0", false},
-		{"off", false},
-		{"no", false},
-		{"", false},
-	}
-	for _, tc := range tests {
-		if got := parseBool(tc.in); got != tc.out {
-			t.Errorf("parseBool(%q) = %v; want %v", tc.in, got, tc.out)
-		}
 	}
 }

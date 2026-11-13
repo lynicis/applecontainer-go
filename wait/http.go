@@ -113,10 +113,17 @@ func (s *HTTPStrategy) WaitUntilReady(ctx context.Context, target StrategyTarget
 	if s.UseTLS {
 		scheme = "https"
 	}
+	u, err := url.Parse(s.Path)
+	if err != nil {
+		// Tolerate paths the CLI accepts, e.g. a bare "%": treat them literally.
+		u = &url.URL{Path: s.Path}
+	}
+	// Any scheme/host in s.Path is ignored: the endpoint host always comes from the target.
 	endpoint := (&url.URL{
-		Scheme: scheme,
-		Host:   net.JoinHostPort(host, strconv.Itoa(mappedPort)),
-		Path:   s.Path,
+		Scheme:   scheme,
+		Host:     net.JoinHostPort(host, strconv.Itoa(mappedPort)),
+		Path:     u.Path,
+		RawQuery: u.RawQuery,
 	}).String()
 
 	checkReady := func() bool {
@@ -141,21 +148,5 @@ func (s *HTTPStrategy) WaitUntilReady(ctx context.Context, target StrategyTarget
 		return ok
 	}
 
-	ticker := time.NewTicker(s.PollInterval)
-	defer ticker.Stop()
-
-	for {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if checkReady() {
-			return nil
-		}
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
-		}
-	}
+	return pollReady(ctx, s.PollInterval, checkReady)
 }
