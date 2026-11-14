@@ -44,6 +44,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `HostPorts` accepts both `"80"` and `"80/tcp"` keys
 - `wait.ForHTTP` preserves query strings in the path
 
+## [0.3.0] - 2026-07-13
+
+### Added
+- Exported `Provider` struct, replacing the `ContainerProvider` interface and the unexported `cliProvider`
+- `wait.StrategyTarget` gained `State()` (status and exit code from one inspect), used by the health, HTTP, port and SQL strategies
+- Driver benchmarks now run pgx, pq and GORM under both `applecontainer-go` and `testcontainers-go` (36 sub-benchmarks)
+
+### Changed
+- `Container`, `Network` and `Volume` are concrete exported types instead of interfaces; `Run` returns `*Container`, `CleanupContainer` takes `*Container`, and `NewNetwork`/`NewVolume`/`WithNetwork` use `*Network`/`*Volume`
+- `Config` is down to `BinaryPath`; `DefaultNetwork`, `DefaultPlatform`, `HubImagePrefix` and `PullTimeout` are gone
+- `SessionID` uses 16 random bytes instead of a pid/timestamp hash
+- Wait targets cache the container host and mapped ports, and the copy path avoids a full read when the host file mode already matches
+- Benchmark timers exclude setup, failed pulls fail the benchmark, and allocation numbers are reported; README tables refreshed (Apple M5, Go 1.26.5)
+
+### Removed
+- Removed the `ImageInspect` type
+- Removed `WithWaitStrategyAndDeadline`, `WithAdditionalWaitStrategy`, `WithCLIArgsModifier` and `CLIArgsModifier`
+
+### Fixed
+- `waitTarget.Logs` tails with follow, so log-based waits see output written after the read starts
+- `container image inspect` JSON accepts both object and array shapes and reports empty output with a clear error
+- CI pins Go 1.26 across all modules so gosec runs, and coverage is written to `coverage.txt`
+- Raised unit-test coverage above 90% with explicit testify assertions
+
 ## [0.2.0] - 2026-07-07
 
 ### Added
