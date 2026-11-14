@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-14
+
 ### Added
 - Added a `make fmt` target backed by golangci-lint formatting
 - Added hermetic Go-layer microbenchmarks plus `make bench-hermetic`, sampled `make test-benchmark` runs and `make benchstat` comparison targets
@@ -41,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `WithEntrypoint` keeps the entrypoint arguments after the program
 - `HostPorts` accepts both `"80"` and `"80/tcp"` keys
 - `wait.ForHTTP` preserves query strings in the path
+
 ## [0.2.0] - 2026-07-07
 
 ### Added

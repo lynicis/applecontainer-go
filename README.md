@@ -6,7 +6,7 @@ A Go library that runs Linux containers as test dependencies through Apple's nat
 [![codecov](https://codecov.io/gh/lynicis/applecontainer-go/branch/main/graph/badge.svg)](https://codecov.io/gh/lynicis/applecontainer-go)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-**Status:** experimental, pre-1.0 (latest release `v0.3.0`). The API is still moving and minor versions may break it. Maintained actively; issues are triaged as time allows.
+**Status:** experimental, pre-1.0 (latest release `v0.4.0`). The API is still moving and minor versions may break it. Maintained actively; issues are triaged as time allows.
 
 ## Why this instead of the `container` CLI
 
