@@ -50,7 +50,9 @@ make lint            # go tool golangci-lint run ./...
 make fmt             # go tool golangci-lint fmt ./...
 make sec             # go tool gosec ./...
 make test-examples   # cd examples && APPLECONTAINER_INTEGRATION=1 go test -tags integration -v ./...
-make test-benchmark  # cd benchmarks && APPLECONTAINER_BENCHMARK=1 go test -bench=. -benchtime=1x -tags benchmark -timeout=600s ./...
+make test-benchmark  # cd benchmarks && APPLECONTAINER_BENCHMARK=1 go test -bench=. -benchmem -benchtime=1s -count=5 ./... > bench.txt
+make bench-hermetic  # go test -run '^$' -bench=. -benchmem -count=5 ./...   (no container runtime)
+make benchstat       # cd benchmarks && go tool benchstat $(BENCH_OLD) $(BENCH_NEW)
 ```
 
 `golangci-lint` and `gosec` are pinned in the `tool` block of `go.mod` (`go.mod:257`); the Makefile invokes them through `$(GOLANGCI_LINT)` / `$(GOSEC)`, which expand to `go tool ...`, so no `PATH` install is needed.
@@ -73,8 +75,8 @@ make test-benchmark  # cd benchmarks && APPLECONTAINER_BENCHMARK=1 go test -benc
 - Style is mixed: stdlib `testing` with `t.Fatalf` in most files; `testify` (`assert`/`require`) in `container_test.go`, `provider_test.go`, `cli_test.go`, `applecontainer_test.go`, `wait/wait_test.go`. Use `require` for preconditions, `assert` for value checks; table-driven subtests where cases multiply (`container_request_test.go`).
 - `wait/` uses `fakeTarget` implementing `StrategyTarget` plus `httptest.Server`, `net.Listen`, and a registered `mockDriver` for SQL — no runtime needed.
 - Anything touching the real CLI belongs in `examples/` behind `//go:build integration` + `APPLECONTAINER_INTEGRATION=1`, and must call `applecontainer.SkipIfProviderNotHealthy(t)` so unsupported machines skip rather than fail. Use `CleanupContainer` / `CleanupNetwork` for teardown.
-- Benchmarks live in the separate `benchmarks/` module, gated by `APPLECONTAINER_BENCHMARK=1`; `RunWithBoth` runs each case against both runtimes.
-- CI (`.github/workflows/ci.yml`): lint + gosec on ubuntu, `make test-coverage` on `macos-latest`, coverage uploaded to Codecov. Integration tests and benchmarks are not in CI.
+- Benchmarks live in the separate `benchmarks/` module, gated by `APPLECONTAINER_BENCHMARK=1`; `RunWithBoth` runs each case against both runtimes, pulls each image once, and excludes teardown from timers. Root-package `*_bench_test.go` files are hermetic Go-layer microbenchmarks.
+- CI (`.github/workflows/ci.yml`): lint + gosec on ubuntu, `make test-coverage` on `macos-latest`, coverage uploaded to Codecov, and a `benchmark-smoke` job that runs the hermetic benchmarks and compiles the runtime benchmark module. Runtime benchmarks and integration tests are not in CI.
 - `Reset()` also resets the version-check state, so tests that exercise `Run`'s version gate must call it first.
 - New behavior needs a unit test; new `WithXxx` options or wait strategies also need a README row and, where practical, an `examples/` case.
 - Add user-visible changes under `## [Unreleased]` in `CHANGELOG.md` (Keep a Changelog + SemVer sections: Added/Changed/Removed/Fixed/Security/Documentation).

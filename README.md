@@ -25,7 +25,7 @@ If you already use `testcontainers-go` against Docker, the API and wait strategi
 
 - **Not on Linux, not on Intel Macs.** It shells out to Apple's `container` binary, which only exists on macOS 26+ on Apple Silicon.
 - **It is not a Docker replacement.** There is no Docker API, no Compose, no socket. Tooling that speaks the Docker API (Testcontainers Cloud, `docker compose` fixtures, `dockerd`-based CI) stays on Docker and `testcontainers-go`.
-- **Startup parallelism and file copies are slower than Docker** — see [Performance](#performance) for the numbers, including a 10x gap at 8 concurrent starts.
+- **Startup parallelism and file copies are slower than Docker** — see [Performance](#performance) for the numbers, including a 7.6x gap at 8 concurrent starts.
 
 ## Requirements
 
@@ -225,61 +225,76 @@ c, err := applecontainer.Run(ctx, "",
 
 ## Performance
 
-Every benchmark runs the same operation against this library and `testcontainers-go` on Docker, via the `RunWithBoth` harness. Reproduce on your machine:
+Every benchmark runs the same operation against this library and `testcontainers-go` on Docker, via the `RunWithBoth` harness. Figures below are medians from five sampled runs. Reproduce on your machine:
 
 ```bash
-cd benchmarks && APPLECONTAINER_BENCHMARK=1 go test -bench=. -benchmem -benchtime=5x ./...
+make test-benchmark
+cd benchmarks && go tool benchstat bench.txt
 ```
 
-One local run, Go 1.27, darwin/arm64, Apple M5 — re-run before trusting the deltas:
+Use `go tool benchstat old.txt new.txt` (or `make benchstat BENCH_OLD=old.txt BENCH_NEW=new.txt`) to compare before/after runs.
+
+Median of five sampled runs per operation, one local run, Go 1.27, darwin/arm64, Apple M5 — re-run before trusting the deltas:
 
 | Operation | `applecontainer-go` | `testcontainers-go` | Faster |
 |:--|--:|--:|:--:|
-| Stop | 230ms | 187ms | Docker (1.2x) |
-| Start (restart) | 36.6ms | 247ms | Apple (6.7x) |
-| Terminate | 270ms | 206ms | Docker (1.3x) |
-| Inspect | 252ms | 215ms | Docker (1.2x) |
-| Exec (`echo hello`) | 297ms | 332ms | Apple (1.1x) |
-| Copy To (1 KB) | 281ms | 224ms | Docker (1.3x) |
-| Copy To (1 MB) | 273ms | 221ms | Docker (1.2x) |
-| Copy From (1 KB) | 271ms | 209ms | Docker (1.3x) |
-| Copy From (1 MB) | 253ms | 212ms | Docker (1.2x) |
-| Logs (10k lines) | 5.47s | 10.22s | Apple (1.9x) |
-| Wait: HTTP | 595ms | 336ms | Docker (1.8x) |
-| Wait: SQL (pgx) | 1.62s | 1.05s | Docker (1.5x) |
-| Wait: Exec | 648ms | 354ms | Docker (1.8x) |
-| Wait: Health | 609ms | 427ms | Docker (1.4x) |
-| Wait: Composite | 795ms | 414ms | Docker (1.9x) |
-| Wait: Log (spam) | 581ms | 338ms | Docker (1.7x) |
-| Parallel startup (2) | 1.10s | 280ms | Docker (3.9x) |
-| Parallel startup (4) | 2.17s | 331ms | Docker (6.6x) |
-| Parallel startup (8) | 4.40s | 434ms | Docker (10.1x) |
-| TCP Latency (Redis) | 280ms | 367ms | Apple (1.3x) |
+| Stop | 124ms | 144ms | Apple (1.2x) |
+| Start (restart) | 390ms | 59.5ms | Docker (6.6x) |
+| Terminate | 154ms | 151ms | Even |
+| Inspect | 13.7ms | 466µs | Docker (29x) |
+| Exec (`echo hello`) | 56.2ms | 115ms | Apple (2.0x) |
+| Copy To (1 KB) | 22.8ms | 1.27ms | Docker (18x) |
+| Copy To (1 MB) | 26.9ms | 5.74ms | Docker (4.7x) |
+| Copy From (1 KB) | 18.6ms | 875µs | Docker (21x) |
+| Copy From (1 MB) | 21.6ms | 2.35ms | Docker (9.2x) |
+| Logs (10k lines) | 12.9ms | 16.1ms | Apple (1.2x) |
+| HTTP throughput (nginx) | 12.4 MB/s | 11.1 MB/s | Apple (1.1x) |
+| Wait: HTTP | 479ms | 210ms | Docker (2.3x) |
+| Wait: SQL (pgx) | 1.09s | 1.17s | Apple (1.1x) |
+| Wait: Exec | 533ms | 276ms | Docker (1.9x) |
+| Wait: running state (proxy) | 478ms | 336ms | Docker (1.4x) |
+| Wait: Composite | 495ms | 337ms | Docker (1.5x) |
+| Wait: Log (spam) | 505ms | 261ms | Docker (1.9x) |
+| Parallel startup (2) | 883ms | 225ms | Docker (3.9x) |
+| Parallel startup (4) | 1.76s | 289ms | Docker (6.1x) |
+| Parallel startup (8) | 3.57s | 466ms | Docker (7.6x) |
+| Exec (redis-cli ping) | 61.3ms | 114ms | Apple (1.9x) |
+| TCP round trip (Redis) | 47.3µs | 53.4µs | Apple (1.1x) |
+
+Startup (create + start + ready) for the same wait strategy on both runtimes:
+
+| Image | `applecontainer-go` | `testcontainers-go` | Faster |
+|:--|--:|--:|:--:|
+| nginx | 490ms | 209ms | Docker (2.3x) |
+| redis | 524ms | 207ms | Docker (2.5x) |
+| postgres | 854ms | 966ms | Apple (1.1x) |
 
 PostgreSQL driver microbenchmarks (`µs/op`), each driver set running Postgres under the respective runtime:
 
 | Operation | Driver | `applecontainer-go` | `testcontainers-go` | Faster |
 |:--|:--|--:|--:|:--:|
-| Insert | pgx | 2156µs | 2306µs | Apple (1.1x) |
-| | pq | 271µs | 186µs | Docker (1.5x) |
-| | GORM | 1029µs | 781µs | Docker (1.3x) |
-| Bulk insert (100 rows) | pgx | 457µs | 477µs | Apple (1.0x) |
-| | pq | 493µs | 514µs | Apple (1.0x) |
-| | GORM | 668µs | 749µs | Apple (1.1x) |
-| Select by primary key | pgx | 379µs | 477µs | Apple (1.3x) |
-| | pq | 242µs | 350µs | Apple (1.4x) |
-| | GORM | 461µs | 526µs | Apple (1.1x) |
-| Select with filter | pgx | 259µs | 649µs | Apple (2.5x) |
-| | pq | 206µs | 421µs | Apple (2.0x) |
-| | GORM | 218µs | 418µs | Apple (1.9x) |
-| Update | pgx | 399µs | 461µs | Apple (1.2x) |
-| | pq | 334µs | 668µs | Apple (2.0x) |
-| | GORM | 427µs | 579µs | Apple (1.4x) |
-| Delete | pgx | 195µs | 132µs | Docker (1.5x) |
-| | pq | 178µs | 123µs | Docker (1.4x) |
-| | GORM | 174µs | 147µs | Docker (1.2x) |
+| Insert | pgx | 123µs | 63.9µs | Docker (1.9x) |
+| | pq | 198µs | 121µs | Docker (1.6x) |
+| | GORM | 250µs | 190µs | Docker (1.3x) |
+| Bulk insert (100 rows) | pgx | 300µs | 209µs | Docker (1.4x) |
+| | pq | 399µs | 308µs | Docker (1.3x) |
+| | GORM | 474µs | 359µs | Docker (1.3x) |
+| Select by primary key | pgx | 65.0µs | 63.6µs | Even |
+| | pq | 141µs | 123µs | Docker (1.1x) |
+| | GORM | 67.9µs | 68.0µs | Even |
+| Select with filter | pgx | 69.1µs | 71.9µs | Even |
+| | pq | 128µs | 131µs | Even |
+| | GORM | 83.6µs | 88.4µs | Apple (1.1x) |
+| Update | pgx | 140µs | 71.5µs | Docker (2.0x) |
+| | pq | 188µs | 137µs | Docker (1.4x) |
+| | GORM | 240µs | 227µs | Docker (1.1x) |
+| Delete | pgx | 305µs | 73.2µs | Docker (4.2x) |
+| | pq | 193µs | 123µs | Docker (1.6x) |
+| | GORM | 220µs | 180µs | Docker (1.2x) |
 
-Reading the tables: restarts, bulk log retrieval and direct TCP access are the wins. Parallel startup is the loss — up to 10x at 8 concurrent containers — and copy operations pay for spawning `container cp` per transfer. In the driver benchmarks, applecontainer-go wins selects and updates; Docker wins single-row inserts (pq, GORM) and deletes.
+Reading the tables: `Exec`, log retrieval and direct TCP round trips are the wins (or near parity), and Postgres startup and the SQL wait strategy are close. Docker wins parallel startup (up to 7.6x at 8 concurrent containers), inspect, copies — which spawn a `container cp` per transfer — and single-row driver writes and deletes.
+
+The Go layer also has hermetic microbenchmarks (`make bench-hermetic`) for option-to-CLI argument building, inspect parsing, the `exec` process floor, and the HTTP/log wait strategies.
 
 ## Development
 
@@ -287,6 +302,7 @@ Reading the tables: restarts, bulk log retrieval and direct TCP access are the w
 make test            # hermetic, no container runtime needed
 make test-examples   # integration; requires macOS + a running `container` service
 make test-benchmark  # head-to-head benchmarks
+make bench-hermetic  # Go-layer microbenchmarks; no container runtime needed
 make lint
 ```
 

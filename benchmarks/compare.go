@@ -1,14 +1,23 @@
 package benchmarks
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	applecontainer "github.com/lynicis/applecontainer-go"
+)
+
+const (
+	imageAlpine   = "alpine:latest"
+	imageNginx    = "nginx:alpine"
+	imagePostgres = "postgres:15-alpine"
+	imageRedis    = "redis:alpine"
 )
 
 type Runtime int
@@ -50,34 +59,37 @@ func SkipIfProviderNotHealthy(t testing.TB) {
 	applecontainer.SkipIfProviderNotHealthy(t)
 }
 
-// ImageRef resolves image name for the given runtime.
-func ImageRef(name string) string {
-	return name
-}
+var pulled sync.Map
 
-// ContainerName generates a unique container name per benchmark run.
-func ContainerName(b *testing.B) string {
-	return fmt.Sprintf("bench-%s-%d", b.Name(), time.Now().UnixNano())
-}
-
-// prePull pulls the image outside the benchmark timer.
+// prePull pulls the image outside the benchmark timer. Each runtime/image pair
+// is pulled at most once per process; a failed pull fails the benchmark.
 func prePull(t testing.TB, rt Runtime, img string) {
 	t.Helper()
+	key := fmt.Sprintf("%d/%s", rt, img)
+	if _, ok := pulled.Load(key); ok {
+		return
+	}
+	var out string
+	var err error
 	switch rt {
 	case AppleContainer:
-		// For applecontainer, pull via the container CLI.
-		_, _ = runCmd(t, "container", "image", "pull", img)
+		out, err = runCmd(t, "container", "image", "pull", img)
 	case TestcontainersGo:
-		// For testcontainers, pull via docker.
-		_, _ = runCmd(t, "docker", "pull", img)
+		out, err = runCmd(t, "docker", "pull", img)
 	}
+	if err != nil {
+		t.Fatalf("pull %s: %v\n%s", img, err, out)
+	}
+	pulled.Store(key, struct{}{})
 }
 
 // runCmd executes a command and returns combined output.
 func runCmd(t testing.TB, name string, args ...string) (string, error) {
 	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
+	defer cancel()
 	/* #nosec G204 */
-	cmd := exec.Command(name, args...)
+	cmd := exec.CommandContext(ctx, name, args...)
 	out, err := cmd.CombinedOutput()
 	return strings.TrimSpace(string(out)), err
 }

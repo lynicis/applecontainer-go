@@ -1,57 +1,87 @@
 package benchmarks
 
 import (
+	"bufio"
 	"context"
-	"fmt"
 	"io"
+	"net"
 	"net/http"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
 	applecontainer "github.com/lynicis/applecontainer-go"
 	"github.com/lynicis/applecontainer-go/wait"
-
 	tccontainer "github.com/testcontainers/testcontainers-go"
 	tcwait "github.com/testcontainers/testcontainers-go/wait"
 )
 
+// BenchmarkHTTPThroughput measures end-to-end HTTP GET throughput against nginx.
 func BenchmarkHTTPThroughput(b *testing.B) {
-	if os.Getenv("APPLECONTAINER_BENCHMARK") == "" {
-		b.Skip("Set APPLECONTAINER_BENCHMARK=1 to run benchmarks")
-	}
-
-	// Apple container networking doesn't support inbound HTTP from host.
-	// Only benchmark testcontainers-go for HTTP throughput.
-	b.Run("TestcontainersGo", func(b *testing.B) {
-		b.ReportAllocs()
-		SkipIfDockerNotHealthy(b)
+	RunWithBoth(b, func(b *testing.B, rt Runtime) {
 		ctx := context.Background()
-		img := "nginx:alpine"
-		prePull(b, TestcontainersGo, img)
+		prePull(b, rt, imageNginx)
 
 		b.StopTimer()
-		req := tccontainer.GenericContainerRequest{
-			ContainerRequest: tccontainer.ContainerRequest{
-				Image:        img,
-				ExposedPorts: []string{"80"},
-				WaitingFor:   tcwait.ForHTTP("/").WithPort("80"),
-			},
-			Started: true,
+		var endpoint string
+		var terminate func()
+		switch rt {
+		case AppleContainer:
+			c, err := applecontainer.Run(ctx, imageNginx,
+				applecontainer.WithExposedPorts("80"),
+				applecontainer.WithWaitingFor(wait.ForAll(wait.ForLog("ready for start up")).WithDeadline(120*time.Second)),
+			)
+			if err != nil {
+				b.Fatal(err)
+			}
+			terminate = func() { _ = c.Terminate(ctx) }
+			ep, err := c.Endpoint(ctx, "80")
+			if err != nil {
+				b.Fatal(err)
+			}
+			endpoint = "http://" + ep
+		case TestcontainersGo:
+			c, err := tccontainer.GenericContainer(ctx, tccontainer.GenericContainerRequest{
+				ContainerRequest: tccontainer.ContainerRequest{
+					Image:        imageNginx,
+					ExposedPorts: []string{"80"},
+					WaitingFor:   tcwait.ForLog("ready for start up"),
+				},
+				Started: true,
+			})
+			if err != nil {
+				b.Fatal(err)
+			}
+			terminate = func() { _ = c.Terminate(ctx) }
+			host, err := c.Host(ctx)
+			if err != nil {
+				b.Fatal(err)
+			}
+			port, err := c.MappedPort(ctx, "80")
+			if err != nil {
+				b.Fatal(err)
+			}
+			endpoint = "http://" + net.JoinHostPort(host, port.Port())
 		}
-		c, err := tccontainer.GenericContainer(ctx, req)
+		defer func() { b.StopTimer(); terminate() }()
+
+		client := &http.Client{Timeout: 5 * time.Second}
+
+		resp, err := client.Get(endpoint)
 		if err != nil {
 			b.Fatal(err)
 		}
-		defer func() { _ = c.Terminate(ctx) }()
-		host, _ := c.Host(ctx)
-		port, _ := c.MappedPort(ctx, "80")
-		endpoint := fmt.Sprintf("http://%s:%s", host, port.Port())
+		body, err := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		b.ResetTimer()
+		b.SetBytes(int64(len(body)))
 		b.StartTimer()
 
-		client := &http.Client{Timeout: 5 * time.Second}
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			resp, err := client.Get(endpoint)
 			if err != nil {
 				b.Fatal(err)
@@ -62,10 +92,11 @@ func BenchmarkHTTPThroughput(b *testing.B) {
 	})
 }
 
-func BenchmarkTCPLatency(b *testing.B) {
+// BenchmarkExecRedisPing measures `Exec redis-cli ping` on both runtimes.
+func BenchmarkExecRedisPing(b *testing.B) {
 	RunWithBoth(b, func(b *testing.B, rt Runtime) {
 		ctx := context.Background()
-		img := "redis:alpine"
+		img := imageRedis
 
 		b.StopTimer()
 		switch rt {
@@ -77,10 +108,10 @@ func BenchmarkTCPLatency(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
-			defer func() { _ = c.Terminate(ctx) }()
+			defer func() { b.StopTimer(); _ = c.Terminate(ctx) }()
 			b.StartTimer()
 
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				_, output, err := c.Exec(ctx, []string{"redis-cli", "ping"})
 				if err != nil {
 					b.Fatal(err)
@@ -90,23 +121,22 @@ func BenchmarkTCPLatency(b *testing.B) {
 				}
 			}
 		case TestcontainersGo:
-			req := tccontainer.GenericContainerRequest{
+			c, err := tccontainer.GenericContainer(ctx, tccontainer.GenericContainerRequest{
 				ContainerRequest: tccontainer.ContainerRequest{
 					Image:        img,
 					ExposedPorts: []string{"6379"},
 					WaitingFor:   tcwait.ForLog("Ready"),
 				},
 				Started: true,
-			}
-			c, err := tccontainer.GenericContainer(ctx, req)
+			})
 			if err != nil {
 				b.Fatal(err)
 			}
-			defer func() { _ = c.Terminate(ctx) }()
+			defer func() { b.StopTimer(); _ = c.Terminate(ctx) }()
 			b.StartTimer()
 
-			for i := 0; i < b.N; i++ {
-				code, reader, err := c.Exec(ctx, []string{"redis-cli", "ping"})
+			for range b.N {
+				_, reader, err := c.Exec(ctx, []string{"redis-cli", "ping"})
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -114,7 +144,91 @@ func BenchmarkTCPLatency(b *testing.B) {
 				if !strings.Contains(string(output), "PONG") {
 					b.Fatalf("expected PONG, got: %s", string(output))
 				}
-				_ = code
+			}
+		}
+	})
+}
+
+// BenchmarkTCPRoundTrip measures direct TCP PING/PONG round trips against Redis.
+func BenchmarkTCPRoundTrip(b *testing.B) {
+	RunWithBoth(b, func(b *testing.B, rt Runtime) {
+		ctx := context.Background()
+		prePull(b, rt, imageRedis)
+
+		b.StopTimer()
+		var endpoint string
+		var terminate func()
+		switch rt {
+		case AppleContainer:
+			c, err := applecontainer.Run(ctx, imageRedis,
+				applecontainer.WithExposedPorts("6379"),
+				applecontainer.WithWaitingFor(wait.ForAll(wait.ForLog("Ready")).WithDeadline(120*time.Second)),
+			)
+			if err != nil {
+				b.Fatal(err)
+			}
+			terminate = func() { _ = c.Terminate(ctx) }
+			ep, err := c.Endpoint(ctx, "6379")
+			if err != nil {
+				b.Fatal(err)
+			}
+			endpoint = ep
+		case TestcontainersGo:
+			c, err := tccontainer.GenericContainer(ctx, tccontainer.GenericContainerRequest{
+				ContainerRequest: tccontainer.ContainerRequest{
+					Image:        imageRedis,
+					ExposedPorts: []string{"6379"},
+					WaitingFor:   tcwait.ForLog("Ready"),
+				},
+				Started: true,
+			})
+			if err != nil {
+				b.Fatal(err)
+			}
+			terminate = func() { _ = c.Terminate(ctx) }
+			host, err := c.Host(ctx)
+			if err != nil {
+				b.Fatal(err)
+			}
+			port, err := c.MappedPort(ctx, "6379")
+			if err != nil {
+				b.Fatal(err)
+			}
+			endpoint = net.JoinHostPort(host, port.Port())
+		}
+		defer func() { b.StopTimer(); terminate() }()
+
+		conn, err := net.Dial("tcp", endpoint)
+		if err != nil {
+			b.Fatal(err)
+		}
+		defer func() { _ = conn.Close() }()
+		reader := bufio.NewReader(conn)
+
+		if _, err := conn.Write([]byte("PING\r\n")); err != nil {
+			b.Fatal(err)
+		}
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			b.Fatal(err)
+		}
+		if line != "+PONG\r\n" {
+			b.Fatalf("expected +PONG, got: %q", line)
+		}
+
+		b.ResetTimer()
+		b.StartTimer()
+
+		for range b.N {
+			if _, err := conn.Write([]byte("PING\r\n")); err != nil {
+				b.Fatal(err)
+			}
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				b.Fatal(err)
+			}
+			if line != "+PONG\r\n" {
+				b.Fatalf("expected +PONG, got: %q", line)
 			}
 		}
 	})

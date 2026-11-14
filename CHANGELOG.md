@@ -9,8 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Added a `make fmt` target backed by golangci-lint formatting
+- Added hermetic Go-layer microbenchmarks plus `make bench-hermetic`, sampled `make test-benchmark` runs and `make benchstat` comparison targets
+- Added a CI benchmark smoke job that runs the hermetic benchmarks and compiles the runtime benchmark module
 
 ### Changed
+- Benchmarks now measure the same operation on both runtimes: startup is a shared nginx/redis/postgres table, HTTP throughput and direct TCP round trips run against both, SQL wait uses `ForSQL` on both sides, and build benchmarks are cache-free on both
+- Benchmark teardown is excluded from timers, failures fail the benchmark, and the harness pulls images once per process
+- The README performance section reports `Exec (redis-cli ping)` and `Wait: running state (proxy)` under their measured names
 - Adopted the Go 1.27 toolchain and pinned golangci-lint and gosec as Go tool dependencies
 - `NetworkRequest` no longer takes `Driver` or `EnableIPv6`; `Config.Debug` is gone (the CLI reads `CONTAINER_DEBUG` itself)
 - Containers are no longer created with `--rm`; `Terminate`/`CleanupContainer` remove them and `Prune` clears leftovers

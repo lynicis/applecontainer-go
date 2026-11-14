@@ -27,25 +27,36 @@ func (BenchModel) TableName() string {
 	return "bench_models"
 }
 
+// createTable creates the fixture table. The val index keeps the per-sample
+// insert cleanup (DELETE ... WHERE val = $1) cheap; both runtimes share it.
+func createTable(t testing.TB, db *sql.DB) {
+	t.Helper()
+	if _, err := db.Exec("CREATE TABLE bench_models (id SERIAL PRIMARY KEY, val TEXT)"); err != nil {
+		t.Fatalf("create table: %v", err)
+	}
+	if _, err := db.Exec("CREATE INDEX bench_models_val_idx ON bench_models (val)"); err != nil {
+		t.Fatalf("create index: %v", err)
+	}
+}
+
 func setupPostgres(t testing.TB, rt Runtime) (string, func()) {
 	t.Helper()
 
 	switch rt {
 	case AppleContainer:
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
 
-		c, err := applecontainer.Run(ctx, "postgres:15-alpine",
+		c, err := applecontainer.Run(ctx, imagePostgres,
 			applecontainer.WithExposedPorts("5432"),
 			applecontainer.WithEnv(map[string]string{
 				"POSTGRES_DB":       "bench",
 				"POSTGRES_USER":     "bench",
 				"POSTGRES_PASSWORD": "bench",
 			}),
-			applecontainer.WithWaitingFor(
-				wait.ForLog("database system is ready to accept connections").
-					WithOccurrence(2),
-			),
+			applecontainer.WithWaitingFor(wait.ForAll(
+				wait.ForLog("database system is ready to accept connections").WithOccurrence(2),
+			).WithDeadline(120*time.Second)),
 		)
 		if err != nil {
 			t.Fatalf("applecontainer postgres: %v", err)
@@ -56,25 +67,22 @@ func setupPostgres(t testing.TB, rt Runtime) (string, func()) {
 		}
 		connStr := fmt.Sprintf("postgres://bench:bench@%s/bench?sslmode=disable", endpoint)
 
-		// Create table
 		db, err := sql.Open("postgres", connStr)
 		if err != nil {
 			t.Fatalf("sql open: %v", err)
 		}
 		defer db.Close()
-		if _, err := db.Exec("CREATE TABLE bench_models (id SERIAL PRIMARY KEY, val TEXT)"); err != nil {
-			t.Fatalf("create table: %v", err)
-		}
+		createTable(t, db)
 		return connStr, func() { _ = c.Terminate(context.Background()) }
 
 	case TestcontainersGo:
-		pgContainer, err := postgres.Run(context.Background(), "postgres:15-alpine",
+		pgContainer, err := postgres.Run(context.Background(), imagePostgres,
 			postgres.WithDatabase("bench"),
 			postgres.WithUsername("bench"),
 			postgres.WithPassword("bench"),
 			testcontainers.WithWaitStrategy(
 				wait2.ForLog("database system is ready to accept connections").
-					WithOccurrence(2).WithStartupTimeout(30*time.Second),
+					WithOccurrence(2).WithStartupTimeout(120*time.Second),
 			),
 		)
 		if err != nil {
@@ -85,254 +93,330 @@ func setupPostgres(t testing.TB, rt Runtime) (string, func()) {
 			t.Fatalf("conn string: %v", err)
 		}
 
-		// Create table
 		db, err := sql.Open("postgres", connStr)
 		if err != nil {
 			t.Fatalf("sql open: %v", err)
 		}
 		defer db.Close()
-		if _, err := db.Exec("CREATE TABLE bench_models (id SERIAL PRIMARY KEY, val TEXT)"); err != nil {
-			t.Fatalf("create table: %v", err)
-		}
+		createTable(t, db)
 		return connStr, func() { _ = pgContainer.Terminate(context.Background()) }
 	}
 	panic("unreachable")
 }
 
+const bulkRows = 100
+
+// bulkInsertQuery builds "INSERT ... VALUES ($1),($2),..." once so the timed
+// loop measures the driver, not string building.
+func bulkInsertQuery(n int) string {
+	q := "INSERT INTO bench_models (val) VALUES "
+	for j := range n {
+		if j > 0 {
+			q += ","
+		}
+		q += fmt.Sprintf("($%d)", j+1)
+	}
+	return q
+}
+
+// cleanupRows removes the rows a timed insert benchmark wrote. It runs outside
+// the timer so insert samples do not grow the fixture table and skew later
+// select/delete benchmarks.
+func cleanupRows(b *testing.B, db *sql.DB, val string) {
+	b.StopTimer()
+	if _, err := db.Exec("DELETE FROM bench_models WHERE val = $1", val); err != nil {
+		b.Fatalf("cleanup %s: %v", val, err)
+	}
+}
+
 // runDriverBenchmarks exercises pgx, database/sql (lib/pq), and GORM against a Postgres connStr.
-// Pre-condition: the bench_models table already exists.
+// Pre-condition: the bench_models table already exists and contains the seed rows.
 func runDriverBenchmarks(b *testing.B, connStr string) {
 	ctx := context.Background()
 
-	// 1. pgx setup
 	pgxPool, err := pgxpool.New(ctx, connStr)
 	if err != nil {
 		b.Fatalf("pgxpool.New failed: %v", err)
 	}
 	defer pgxPool.Close()
 
-	// 2. pq setup
 	pqDB, err := sql.Open("postgres", connStr)
 	if err != nil {
 		b.Fatalf("sql.Open pq failed: %v", err)
 	}
 	defer func() { _ = pqDB.Close() }()
 
-	// 3. gorm setup
 	gormDB, err := gorm.Open(gormpg.Open(connStr), &gorm.Config{})
 	if err != nil {
 		b.Fatalf("gorm.Open failed: %v", err)
 	}
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		b.Fatalf("gorm db: %v", err)
+	}
+	defer func() { _ = sqlDB.Close() }()
 
-	// Pre-insert some data for selects
-	for i := 0; i < 1000; i++ {
-		_, err = pqDB.Exec("INSERT INTO bench_models (val) VALUES ($1)", fmt.Sprintf("val-%d", i))
-		if err != nil {
-			b.Fatalf("pre-insert failed: %v", err)
-		}
+	if _, err := pqDB.Exec("INSERT INTO bench_models (val) SELECT 'val-' || g FROM generate_series(1, 1000) AS g"); err != nil {
+		b.Fatalf("seed: %v", err)
+	}
+
+	bulkQuery := bulkInsertQuery(bulkRows)
+	pgxBulkArgs := make([]any, bulkRows)
+	pqBulkArgs := make([]any, bulkRows)
+	for j := range bulkRows {
+		pgxBulkArgs[j] = "pgx-bulk"
+		pqBulkArgs[j] = "pq-bulk"
 	}
 
 	b.Run("pgx-insert", func(b *testing.B) {
 		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			_, _ = pgxPool.Exec(ctx, "INSERT INTO bench_models (val) VALUES ($1)", "pgx-ins")
+		for range b.N {
+			if _, err := pgxPool.Exec(ctx, "INSERT INTO bench_models (val) VALUES ($1)", "pgx-ins"); err != nil {
+				b.Fatal(err)
+			}
 		}
+		cleanupRows(b, pqDB, "pgx-ins")
 	})
 
 	b.Run("pq-insert", func(b *testing.B) {
 		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			_, _ = pqDB.Exec("INSERT INTO bench_models (val) VALUES ($1)", "pq-ins")
+		for range b.N {
+			if _, err := pqDB.Exec("INSERT INTO bench_models (val) VALUES ($1)", "pq-ins"); err != nil {
+				b.Fatal(err)
+			}
 		}
+		cleanupRows(b, pqDB, "pq-ins")
 	})
 
 	b.Run("gorm-insert", func(b *testing.B) {
 		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			_ = gormDB.Create(&BenchModel{Val: "gorm-ins"}).Error
+		for range b.N {
+			if err := gormDB.Create(&BenchModel{Val: "gorm-ins"}).Error; err != nil {
+				b.Fatal(err)
+			}
 		}
+		cleanupRows(b, pqDB, "gorm-ins")
 	})
 
-	// Bulk insert (100 rows)
 	b.Run("pgx-bulk-insert-100", func(b *testing.B) {
 		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			query := "INSERT INTO bench_models (val) VALUES "
-			args := make([]any, 100)
-			for j := 0; j < 100; j++ {
-				if j > 0 {
-					query += ","
-				}
-				query += fmt.Sprintf("($%d)", j+1)
-				args[j] = "pgx-bulk"
+		for range b.N {
+			if _, err := pgxPool.Exec(ctx, bulkQuery, pgxBulkArgs...); err != nil {
+				b.Fatal(err)
 			}
-			_, _ = pgxPool.Exec(ctx, query, args...)
 		}
+		cleanupRows(b, pqDB, "pgx-bulk")
 	})
 
 	b.Run("pq-bulk-insert-100", func(b *testing.B) {
 		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			query := "INSERT INTO bench_models (val) VALUES "
-			args := make([]any, 100)
-			for j := 0; j < 100; j++ {
-				if j > 0 {
-					query += ","
-				}
-				query += fmt.Sprintf("($%d)", j+1)
-				args[j] = "pq-bulk"
+		for range b.N {
+			if _, err := pqDB.Exec(bulkQuery, pqBulkArgs...); err != nil {
+				b.Fatal(err)
 			}
-			_, _ = pqDB.Exec(query, args...)
 		}
+		cleanupRows(b, pqDB, "pq-bulk")
 	})
 
 	b.Run("gorm-bulk-insert-100", func(b *testing.B) {
 		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			rows := make([]BenchModel, 100)
+		for range b.N {
+			rows := make([]BenchModel, bulkRows)
 			for j := range rows {
 				rows[j].Val = "gorm-bulk"
 			}
-			_ = gormDB.CreateInBatches(&rows, 100).Error
+			if err := gormDB.CreateInBatches(&rows, bulkRows).Error; err != nil {
+				b.Fatal(err)
+			}
 		}
+		cleanupRows(b, pqDB, "gorm-bulk")
 	})
 
-	// Select by PK
 	b.Run("pgx-select-pk", func(b *testing.B) {
 		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			var val string
-			_ = pgxPool.QueryRow(ctx, "SELECT val FROM bench_models WHERE id = $1", 1).Scan(&val)
+			if err := pgxPool.QueryRow(ctx, "SELECT val FROM bench_models WHERE id = $1", 1).Scan(&val); err != nil {
+				b.Fatal(err)
+			}
 		}
 	})
 
 	b.Run("pq-select-pk", func(b *testing.B) {
 		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			var val string
-			_ = pqDB.QueryRow("SELECT val FROM bench_models WHERE id = $1", 1).Scan(&val)
+			if err := pqDB.QueryRow("SELECT val FROM bench_models WHERE id = $1", 1).Scan(&val); err != nil {
+				b.Fatal(err)
+			}
 		}
 	})
 
 	b.Run("gorm-select-pk", func(b *testing.B) {
 		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			var m BenchModel
-			_ = gormDB.First(&m, 1).Error
+			if err := gormDB.First(&m, 1).Error; err != nil {
+				b.Fatal(err)
+			}
 		}
 	})
 
-	// Select with filter (LIKE query, returns multiple rows)
 	b.Run("pgx-select-filter", func(b *testing.B) {
 		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			rows, _ := pgxPool.Query(ctx, "SELECT id, val FROM bench_models WHERE val LIKE $1 LIMIT 50", "val-%")
-			if rows != nil {
-				rows.Close()
+		for range b.N {
+			rows, err := pgxPool.Query(ctx, "SELECT id, val FROM bench_models WHERE val LIKE $1 LIMIT 50", "val-%")
+			if err != nil {
+				b.Fatal(err)
 			}
+			rows.Close()
 		}
 	})
 
 	b.Run("pq-select-filter", func(b *testing.B) {
 		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			rows, _ := pqDB.Query("SELECT id, val FROM bench_models WHERE val LIKE $1 LIMIT 50", "val-%")
-			if rows != nil {
-				_ = rows.Close()
+		for range b.N {
+			rows, err := pqDB.Query("SELECT id, val FROM bench_models WHERE val LIKE $1 LIMIT 50", "val-%")
+			if err != nil {
+				b.Fatal(err)
+			}
+			if err := rows.Close(); err != nil {
+				b.Fatal(err)
 			}
 		}
 	})
 
 	b.Run("gorm-select-filter", func(b *testing.B) {
 		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			var ms []BenchModel
-			_ = gormDB.Where("val LIKE ?", "val-%").Limit(50).Find(&ms).Error
+			if err := gormDB.Where("val LIKE ?", "val-%").Limit(50).Find(&ms).Error; err != nil {
+				b.Fatal(err)
+			}
 		}
 	})
 
-	// Update
 	b.Run("pgx-update", func(b *testing.B) {
 		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			_, _ = pgxPool.Exec(ctx, "UPDATE bench_models SET val = $1 WHERE id = $2", "pgx-upd", 1)
+		for range b.N {
+			if _, err := pgxPool.Exec(ctx, "UPDATE bench_models SET val = $1 WHERE id = $2", "pgx-upd", 1); err != nil {
+				b.Fatal(err)
+			}
 		}
 	})
 
 	b.Run("pq-update", func(b *testing.B) {
 		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			_, _ = pqDB.Exec("UPDATE bench_models SET val = $1 WHERE id = $2", "pq-upd", 1)
+		for range b.N {
+			if _, err := pqDB.Exec("UPDATE bench_models SET val = $1 WHERE id = $2", "pq-upd", 1); err != nil {
+				b.Fatal(err)
+			}
 		}
 	})
 
 	b.Run("gorm-update", func(b *testing.B) {
 		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			_ = gormDB.Model(&BenchModel{ID: 1}).Update("val", "gorm-upd").Error
+		for range b.N {
+			if err := gormDB.Model(&BenchModel{ID: 1}).Update("val", "gorm-upd").Error; err != nil {
+				b.Fatal(err)
+			}
 		}
 	})
 
-	// Delete
+	// Deletes insert their own rows first so they never consume the id = 1 row
+	// used by the select and update benchmarks.
 	b.Run("pgx-delete", func(b *testing.B) {
 		b.StopTimer()
-		for i := 0; i < b.N; i++ {
-			_, _ = pgxPool.Exec(ctx, "INSERT INTO bench_models (val) VALUES ($1)", "del")
+		rows, err := pgxPool.Query(ctx, "INSERT INTO bench_models (val) SELECT 'del' FROM generate_series(1, $1::int) RETURNING id", b.N)
+		if err != nil {
+			b.Fatalf("insert for delete: %v", err)
 		}
-		b.StartTimer()
+		ids := make([]int64, 0, b.N)
+		for rows.Next() {
+			var id int64
+			if err := rows.Scan(&id); err != nil {
+				b.Fatalf("scan id: %v", err)
+			}
+			ids = append(ids, id)
+		}
+		if err := rows.Err(); err != nil {
+			b.Fatalf("insert for delete: %v", err)
+		}
+		rows.Close()
 		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
-			_, _ = pgxPool.Exec(ctx, "DELETE FROM bench_models WHERE id = (SELECT id FROM bench_models LIMIT 1)")
+		b.ResetTimer()
+		b.StartTimer()
+		for _, id := range ids {
+			if _, err := pgxPool.Exec(ctx, "DELETE FROM bench_models WHERE id = $1", id); err != nil {
+				b.Fatal(err)
+			}
 		}
 	})
 
 	b.Run("pq-delete", func(b *testing.B) {
 		b.StopTimer()
-		for i := 0; i < b.N; i++ {
-			_, _ = pqDB.Exec("INSERT INTO bench_models (val) VALUES ($1)", "del")
+		rows, err := pqDB.Query("INSERT INTO bench_models (val) SELECT 'del' FROM generate_series(1, $1::int) RETURNING id", b.N)
+		if err != nil {
+			b.Fatalf("insert for delete: %v", err)
 		}
-		b.StartTimer()
+		ids := make([]int64, 0, b.N)
+		for rows.Next() {
+			var id int64
+			if err := rows.Scan(&id); err != nil {
+				b.Fatalf("scan id: %v", err)
+			}
+			ids = append(ids, id)
+		}
+		if err := rows.Err(); err != nil {
+			b.Fatalf("insert for delete: %v", err)
+		}
+		if err := rows.Close(); err != nil {
+			b.Fatalf("insert for delete: %v", err)
+		}
 		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
-			_, _ = pqDB.Exec("DELETE FROM bench_models WHERE id = (SELECT id FROM bench_models LIMIT 1)")
+		b.ResetTimer()
+		b.StartTimer()
+		for _, id := range ids {
+			if _, err := pqDB.Exec("DELETE FROM bench_models WHERE id = $1", id); err != nil {
+				b.Fatal(err)
+			}
 		}
 	})
 
 	b.Run("gorm-delete", func(b *testing.B) {
 		b.StopTimer()
-		for i := 0; i < b.N; i++ {
-			_ = gormDB.Create(&BenchModel{Val: "del"}).Error
+		rows, err := pqDB.Query("INSERT INTO bench_models (val) SELECT 'del' FROM generate_series(1, $1::int) RETURNING id", b.N)
+		if err != nil {
+			b.Fatalf("insert for delete: %v", err)
 		}
-		b.StartTimer()
+		ids := make([]int, 0, b.N)
+		for rows.Next() {
+			var id int
+			if err := rows.Scan(&id); err != nil {
+				b.Fatalf("scan id: %v", err)
+			}
+			ids = append(ids, id)
+		}
+		if err := rows.Err(); err != nil {
+			b.Fatalf("insert for delete: %v", err)
+		}
+		if err := rows.Close(); err != nil {
+			b.Fatalf("insert for delete: %v", err)
+		}
 		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
-			_ = gormDB.Exec("DELETE FROM bench_models WHERE id = (SELECT id FROM bench_models LIMIT 1)")
+		b.ResetTimer()
+		b.StartTimer()
+		for _, id := range ids {
+			if err := gormDB.Delete(&BenchModel{}, id).Error; err != nil {
+				b.Fatal(err)
+			}
 		}
 	})
 }
 
 func BenchmarkDrivers(b *testing.B) {
-	if b.N < 1 {
-		return
-	}
-
 	RunWithBoth(b, func(b *testing.B, rt Runtime) {
-		prePull(b, rt, "postgres:15-alpine")
+		prePull(b, rt, imagePostgres)
 		connStr, teardown := setupPostgres(b, rt)
 		defer teardown()
 		runDriverBenchmarks(b, connStr)

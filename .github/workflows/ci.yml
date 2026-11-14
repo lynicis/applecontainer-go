@@ -71,3 +71,25 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.txt
+
+  benchmark-smoke:
+    name: Benchmark Smoke
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: "${{ env.GO_VERSION }}"
+          cache: true
+          cache-dependency-path: |
+            go.sum
+            benchmarks/go.sum
+
+      - name: Run hermetic benchmarks once
+        run: go test -run '^$' -bench=. -benchmem -benchtime=1x -timeout=15m ./...
+
+      - name: Compile runtime benchmarks
+        run: cd benchmarks && go test -run '^$' -bench='^$' ./...

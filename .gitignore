@@ -2,3 +2,4 @@
 main
 coverage.out
 coverage.html
+/benchmarks/*.txt

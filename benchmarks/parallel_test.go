@@ -9,27 +9,26 @@ import (
 
 	applecontainer "github.com/lynicis/applecontainer-go"
 	"github.com/lynicis/applecontainer-go/wait"
-
 	tccontainer "github.com/testcontainers/testcontainers-go"
 	tcwait "github.com/testcontainers/testcontainers-go/wait"
 )
 
 func BenchmarkParallel(b *testing.B) {
 	for _, n := range []int{2, 4, 8} {
-		n := n
-		b.Run(fmt.Sprintf("%d", n), func(b *testing.B) {
+		b.Run(fmt.Sprintf("containers=%d", n), func(b *testing.B) {
 			RunWithBoth(b, func(b *testing.B, rt Runtime) {
-				img := "nginx:alpine"
+				img := imageNginx
 				prePull(b, rt, img)
 				b.ResetTimer()
 
-				for i := 0; i < b.N; i++ {
+				for range b.N {
 					ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 					var wg sync.WaitGroup
 					var mu sync.Mutex
 					var cleanups []func()
+					var firstErr error
 
-					for j := 0; j < n; j++ {
+					for range n {
 						wg.Add(1)
 						go func() {
 							defer wg.Done()
@@ -40,24 +39,31 @@ func BenchmarkParallel(b *testing.B) {
 									applecontainer.WithWaitingFor(wait.ForAll(wait.ForLog("ready for start up")).WithDeadline(120*time.Second)),
 								)
 								if err != nil {
-									b.Error(err)
+									mu.Lock()
+									if firstErr == nil {
+										firstErr = err
+									}
+									mu.Unlock()
 									return
 								}
 								mu.Lock()
 								cleanups = append(cleanups, func() { _ = c.Terminate(ctx) })
 								mu.Unlock()
 							case TestcontainersGo:
-								req := tccontainer.GenericContainerRequest{
+								c, err := tccontainer.GenericContainer(ctx, tccontainer.GenericContainerRequest{
 									ContainerRequest: tccontainer.ContainerRequest{
 										Image:        img,
 										ExposedPorts: []string{"80"},
-										WaitingFor:   tcwait.ForHTTP("/").WithPort("80"),
+										WaitingFor:   tcwait.ForLog("ready for start up"),
 									},
 									Started: true,
-								}
-								c, err := tccontainer.GenericContainer(ctx, req)
+								})
 								if err != nil {
-									b.Error(err)
+									mu.Lock()
+									if firstErr == nil {
+										firstErr = err
+									}
+									mu.Unlock()
 									return
 								}
 								mu.Lock()
@@ -72,6 +78,9 @@ func BenchmarkParallel(b *testing.B) {
 						fn()
 					}
 					cancel()
+					if firstErr != nil {
+						b.Fatal(firstErr)
+					}
 					b.StartTimer()
 				}
 			})

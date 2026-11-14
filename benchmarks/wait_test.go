@@ -9,6 +9,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	applecontainer "github.com/lynicis/applecontainer-go"
 	"github.com/lynicis/applecontainer-go/wait"
+	"github.com/moby/moby/api/types/network"
 	tccontainer "github.com/testcontainers/testcontainers-go"
 	tcwait "github.com/testcontainers/testcontainers-go/wait"
 )
@@ -16,14 +17,11 @@ import (
 func BenchmarkWaitStrategyHTTP(b *testing.B) {
 	RunWithBoth(b, func(b *testing.B, rt Runtime) {
 		ctx := context.Background()
-		img := "nginx:alpine"
 
 		switch rt {
 		case AppleContainer:
-			for i := 0; i < b.N; i++ {
-				b.StopTimer()
-				b.StartTimer()
-				c, err := applecontainer.Run(ctx, img,
+			for range b.N {
+				c, err := applecontainer.Run(ctx, imageNginx,
 					applecontainer.WithExposedPorts("80"),
 					applecontainer.WithWaitingFor(wait.ForAll(wait.ForHTTP("/").WithPort("80")).WithDeadline(120*time.Second)),
 				)
@@ -32,25 +30,24 @@ func BenchmarkWaitStrategyHTTP(b *testing.B) {
 				}
 				b.StopTimer()
 				_ = c.Terminate(ctx)
+				b.StartTimer()
 			}
 		case TestcontainersGo:
-			for i := 0; i < b.N; i++ {
-				b.StopTimer()
-				req := tccontainer.GenericContainerRequest{
+			for range b.N {
+				c, err := tccontainer.GenericContainer(ctx, tccontainer.GenericContainerRequest{
 					ContainerRequest: tccontainer.ContainerRequest{
-						Image:        img,
+						Image:        imageNginx,
 						ExposedPorts: []string{"80"},
 						WaitingFor:   tcwait.ForHTTP("/").WithPort("80"),
 					},
 					Started: true,
-				}
-				b.StartTimer()
-				c, err := tccontainer.GenericContainer(ctx, req)
+				})
 				if err != nil {
 					b.Fatal(err)
 				}
 				b.StopTimer()
 				_ = c.Terminate(ctx)
+				b.StartTimer()
 			}
 		}
 	})
@@ -59,49 +56,45 @@ func BenchmarkWaitStrategyHTTP(b *testing.B) {
 func BenchmarkWaitStrategySQL(b *testing.B) {
 	RunWithBoth(b, func(b *testing.B, rt Runtime) {
 		ctx := context.Background()
-		img := "postgres:alpine"
 		env := map[string]string{"POSTGRES_PASSWORD": "test"}
 
 		switch rt {
 		case AppleContainer:
-			for i := 0; i < b.N; i++ {
-				b.StopTimer()
-				b.StartTimer()
-				c, err := applecontainer.Run(ctx, img,
+			for range b.N {
+				c, err := applecontainer.Run(ctx, imagePostgres,
 					applecontainer.WithExposedPorts("5432"),
 					applecontainer.WithEnv(env),
 					applecontainer.WithWaitingFor(wait.ForAll(
 						wait.ForSQL("5432", "pgx", func(host string, port int) string {
-							return fmt.Sprintf("user=postgres password=test host=%s port=%d dbname=postgres sslmode=disable", host, port)
-						})).WithDeadline(
-
-						120*time.Second)),
+							return fmt.Sprintf("postgres://postgres:test@%s:%d/postgres?sslmode=disable", host, port)
+						})).WithDeadline(120*time.Second)),
 				)
 				if err != nil {
 					b.Fatal(err)
 				}
 				b.StopTimer()
 				_ = c.Terminate(ctx)
+				b.StartTimer()
 			}
 		case TestcontainersGo:
-			for i := 0; i < b.N; i++ {
-				b.StopTimer()
-				req := tccontainer.GenericContainerRequest{
+			for range b.N {
+				c, err := tccontainer.GenericContainer(ctx, tccontainer.GenericContainerRequest{
 					ContainerRequest: tccontainer.ContainerRequest{
-						Image:        img,
+						Image:        imagePostgres,
 						ExposedPorts: []string{"5432/tcp"},
 						Env:          env,
-						WaitingFor:   tcwait.ForLog("database system is ready to accept connections").WithStartupTimeout(120 * time.Second),
+						WaitingFor: tcwait.ForSQL("5432", "pgx", func(host string, port network.Port) string {
+							return fmt.Sprintf("postgres://postgres:test@%s:%s/postgres?sslmode=disable", host, port.Port())
+						}).WithStartupTimeout(120 * time.Second),
 					},
 					Started: true,
-				}
-				b.StartTimer()
-				c, err := tccontainer.GenericContainer(ctx, req)
+				})
 				if err != nil {
 					b.Fatal(err)
 				}
 				b.StopTimer()
 				_ = c.Terminate(ctx)
+				b.StartTimer()
 			}
 		}
 	})
@@ -110,15 +103,12 @@ func BenchmarkWaitStrategySQL(b *testing.B) {
 func BenchmarkWaitStrategyExec(b *testing.B) {
 	RunWithBoth(b, func(b *testing.B, rt Runtime) {
 		ctx := context.Background()
-		img := "alpine:latest"
 		cmd := []string{"sh", "-c", "sleep 3 && true; sleep 3600"}
 
 		switch rt {
 		case AppleContainer:
-			for i := 0; i < b.N; i++ {
-				b.StopTimer()
-				b.StartTimer()
-				c, err := applecontainer.Run(ctx, img,
+			for range b.N {
+				c, err := applecontainer.Run(ctx, imageAlpine,
 					applecontainer.WithCmd(cmd...),
 					applecontainer.WithWaitingFor(wait.ForAll(wait.ForExec([]string{"true"})).WithDeadline(120*time.Second)),
 				)
@@ -127,25 +117,24 @@ func BenchmarkWaitStrategyExec(b *testing.B) {
 				}
 				b.StopTimer()
 				_ = c.Terminate(ctx)
+				b.StartTimer()
 			}
 		case TestcontainersGo:
-			for i := 0; i < b.N; i++ {
-				b.StopTimer()
-				req := tccontainer.GenericContainerRequest{
+			for range b.N {
+				c, err := tccontainer.GenericContainer(ctx, tccontainer.GenericContainerRequest{
 					ContainerRequest: tccontainer.ContainerRequest{
-						Image:      img,
+						Image:      imageAlpine,
 						Cmd:        cmd,
 						WaitingFor: tcwait.ForExec([]string{"true"}),
 					},
 					Started: true,
-				}
-				b.StartTimer()
-				c, err := tccontainer.GenericContainer(ctx, req)
+				})
 				if err != nil {
 					b.Fatal(err)
 				}
 				b.StopTimer()
 				_ = c.Terminate(ctx)
+				b.StartTimer()
 			}
 		}
 	})
@@ -154,15 +143,12 @@ func BenchmarkWaitStrategyExec(b *testing.B) {
 func BenchmarkWaitStrategyHealth(b *testing.B) {
 	RunWithBoth(b, func(b *testing.B, rt Runtime) {
 		ctx := context.Background()
-		img := "nginx:alpine"
 		cmd := []string{"nginx", "-g", "daemon off;"}
 
 		switch rt {
 		case AppleContainer:
-			for i := 0; i < b.N; i++ {
-				b.StopTimer()
-				b.StartTimer()
-				c, err := applecontainer.Run(ctx, img,
+			for range b.N {
+				c, err := applecontainer.Run(ctx, imageNginx,
 					applecontainer.WithExposedPorts("80"),
 					applecontainer.WithCmd(cmd...),
 					applecontainer.WithWaitingFor(wait.ForAll(wait.ForHealth()).WithDeadline(120*time.Second)),
@@ -172,28 +158,29 @@ func BenchmarkWaitStrategyHealth(b *testing.B) {
 				}
 				b.StopTimer()
 				_ = c.Terminate(ctx)
+				b.StartTimer()
 			}
 		case TestcontainersGo:
-			for i := 0; i < b.N; i++ {
-				b.StopTimer()
-				req := tccontainer.GenericContainerRequest{
+			for range b.N {
+				c, err := tccontainer.GenericContainer(ctx, tccontainer.GenericContainerRequest{
 					ContainerRequest: tccontainer.ContainerRequest{
-						Image:        img,
+						Image:        imageNginx,
 						ExposedPorts: []string{"80/tcp"},
 						Cmd:          cmd,
-						// tcwait.ForHealthCheck() requires the container to have a HEALTHCHECK instruction.
-						// We'll emulate it by waiting for state "running", which has similar daemon-polling overhead.
-						WaitingFor: tcwait.ForListeningPort("80/tcp").WithStartupTimeout(120 * time.Second), // proxy for daemon fast-return
+						// The two runtimes have no common health primitive: tcwait.ForHealthCheck()
+						// requires a HEALTHCHECK instruction, and nginx:alpine has none. The delta
+						// measured here is state-polling (Apple ForHealth) versus port-polling
+						// (ForListeningPort), not health-check parity.
+						WaitingFor: tcwait.ForListeningPort("80/tcp").WithStartupTimeout(120 * time.Second),
 					},
 					Started: true,
-				}
-				b.StartTimer()
-				c, err := tccontainer.GenericContainer(ctx, req)
+				})
 				if err != nil {
 					b.Fatal(err)
 				}
 				b.StopTimer()
 				_ = c.Terminate(ctx)
+				b.StartTimer()
 			}
 		}
 	})
@@ -202,35 +189,30 @@ func BenchmarkWaitStrategyHealth(b *testing.B) {
 func BenchmarkWaitStrategyComposite(b *testing.B) {
 	RunWithBoth(b, func(b *testing.B, rt Runtime) {
 		ctx := context.Background()
-		img := "nginx:alpine"
 
 		switch rt {
 		case AppleContainer:
-			for i := 0; i < b.N; i++ {
-				b.StopTimer()
-				b.StartTimer()
-				c, err := applecontainer.Run(ctx, img,
+			for range b.N {
+				c, err := applecontainer.Run(ctx, imageNginx,
 					applecontainer.WithExposedPorts("80"),
 					applecontainer.WithWaitingFor(wait.ForAll(
 						wait.ForAll(
 							wait.ForLog("ready for start up"),
 							wait.ForHTTP("/").WithPort("80"),
-						)).WithDeadline(
-
-						120*time.Second)),
+						)).WithDeadline(120*time.Second)),
 				)
 				if err != nil {
 					b.Fatal(err)
 				}
 				b.StopTimer()
 				_ = c.Terminate(ctx)
+				b.StartTimer()
 			}
 		case TestcontainersGo:
-			for i := 0; i < b.N; i++ {
-				b.StopTimer()
-				req := tccontainer.GenericContainerRequest{
+			for range b.N {
+				c, err := tccontainer.GenericContainer(ctx, tccontainer.GenericContainerRequest{
 					ContainerRequest: tccontainer.ContainerRequest{
-						Image:        img,
+						Image:        imageNginx,
 						ExposedPorts: []string{"80"},
 						WaitingFor: tcwait.ForAll(
 							tcwait.ForLog("ready for start up"),
@@ -238,14 +220,13 @@ func BenchmarkWaitStrategyComposite(b *testing.B) {
 						),
 					},
 					Started: true,
-				}
-				b.StartTimer()
-				c, err := tccontainer.GenericContainer(ctx, req)
+				})
 				if err != nil {
 					b.Fatal(err)
 				}
 				b.StopTimer()
 				_ = c.Terminate(ctx)
+				b.StartTimer()
 			}
 		}
 	})
