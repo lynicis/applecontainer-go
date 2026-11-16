@@ -1,4 +1,4 @@
-# applecontainer-go
+# applecontainer-go (experimental)
 
 A Go library that runs Linux containers as test dependencies through Apple's native `container` CLI, with a `testcontainers-go`-shaped API.
 
